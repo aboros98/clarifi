@@ -421,22 +421,34 @@ export default function DocumentExplorer() {
                   )}
                 </div>
               </div>
-              {f.status === "failed" ? (
+              <div className="flex items-center gap-1 shrink-0">
+                {isProcessing ? (
+                  <RefreshCw size={16} className="text-indigo-400 animate-spin" />
+                ) : (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); viewDocument(f.id); }}
+                    className="p-1 text-gray-300 hover:text-gray-600"
+                    title="Vezi document"
+                  >
+                    <Eye size={16} />
+                  </button>
+                )}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    api.deleteDocument(f.id).then(() => loadTree());
+                    if (confirm("Stergi acest document?")) {
+                      api.deleteDocument(f.id).then(() => {
+                        setFiles((prev) => prev.filter((x) => x.id !== f.id));
+                        loadTree();
+                      });
+                    }
                   }}
-                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg shrink-0"
-                  title="Sterge si reincearca"
+                  className="p-1 text-gray-300 hover:text-red-500"
+                  title="Sterge document"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={14} />
                 </button>
-              ) : isProcessing ? (
-                <RefreshCw size={16} className="text-indigo-400 animate-spin shrink-0" />
-              ) : (
-                <Eye size={16} className="text-gray-300 shrink-0" />
-              )}
+              </div>
             </div>
           );
         })}

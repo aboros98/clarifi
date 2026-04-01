@@ -12,6 +12,12 @@ class PDFParser:
     async def parse(self, file_path: Path) -> ParseResult:
         try:
             reader = pypdf.PdfReader(str(file_path))
+            # Handle PDFs flagged as "encrypted" but without actual password
+            if reader.is_encrypted:
+                try:
+                    reader.decrypt("")  # Try empty password
+                except Exception:
+                    logger.warning("Encrypted PDF, trying empty password failed: %s", file_path.name)
         except Exception:
             logger.warning("Failed to read PDF: %s", file_path.name, exc_info=True)
             return ParseResult(

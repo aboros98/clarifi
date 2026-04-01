@@ -124,6 +124,14 @@ async def _background_process(
             timeout=300,
         )
         logger.info("Background processing done: %s", filename)
+        # Mark as stored
+        try:
+            async with get_async_session() as session:
+                doc = await session.get(Document, doc_id)
+                if doc and doc.processing_status != ProcessingStatus.FAILED:
+                    doc.processing_status = ProcessingStatus.STORED
+        except Exception:
+            pass
     except Exception:
         logger.exception("Background processing failed: %s", filename)
         # Mark document as failed
