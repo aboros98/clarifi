@@ -28,7 +28,7 @@ class UserProfile(Base, AuditMixin):
     display_name: Mapped[str] = mapped_column(String(500), nullable=False)
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="owner")
     onboarded_at: Mapped[datetime | None] = mapped_column(
-        DateTime(), nullable=True,
+        DateTime(timezone=True), nullable=True,
     )
 
     __table_args__ = (

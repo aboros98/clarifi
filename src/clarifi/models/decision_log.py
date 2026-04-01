@@ -19,7 +19,7 @@ class DecisionLog(Base):
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
     timestamp: Mapped[datetime] = mapped_column(
-        DateTime(), default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
     session_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -54,9 +54,9 @@ class AgentSession(Base):
     )
     user_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     started_at: Mapped[datetime] = mapped_column(
-        DateTime(), default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     message_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     title: Mapped[str | None] = mapped_column(String(500), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
@@ -76,9 +76,9 @@ class SchedulerRun(Base):
     )
     task_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     started_at: Mapped[datetime] = mapped_column(
-        DateTime(), default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="running"
     )

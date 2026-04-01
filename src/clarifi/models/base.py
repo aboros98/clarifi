@@ -11,12 +11,12 @@ class Base(DeclarativeBase):
 
 class AuditMixin:
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(),
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(),
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
@@ -27,7 +27,7 @@ class AuditMixin:
 
 class SoftDeleteMixin:
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
@@ -46,7 +46,7 @@ class SourceTraceableMixin:
 class FreshnessMixin:
     """Tracks whether data has been verified by user and when."""
 
-    verified_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     verified_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     data_source: Mapped[str | None] = mapped_column(
         String(50), nullable=True, default="extraction"

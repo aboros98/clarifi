@@ -26,7 +26,7 @@ class WatchedFolder(Base, AuditMixin):
     folder_id: Mapped[str | None] = mapped_column(String(500), nullable=True)
     display_name: Mapped[str] = mapped_column(String(500), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     files_processed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     __table_args__ = (
@@ -48,7 +48,7 @@ class IntegrationConfig(Base, AuditMixin):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="disconnected"
     )
-    connected_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+    connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
