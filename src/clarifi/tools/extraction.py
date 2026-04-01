@@ -346,13 +346,23 @@ async def _review_extraction(
             )),
         ])
 
-        content = response.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
+        raw_content = response.content
+        if isinstance(raw_content, list):
+            content = " ".join(
+                p["text"] if isinstance(p, dict) and p.get("text") else str(p)
+                for p in raw_content
+            )
+        else:
+            content = str(raw_content)
+        content = content.strip()
 
-        return json.loads(content.strip())
+        # Strip markdown
+        import re as _re
+        md_match = _re.search(r"```(?:json)?\s*\n?(.*?)```", content, _re.DOTALL)
+        if md_match:
+            content = md_match.group(1).strip()
+
+        return json.loads(content)
     except Exception:
         logger.warning("Extraction review failed", exc_info=True)
         return None
