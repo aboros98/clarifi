@@ -37,10 +37,13 @@ interface FileNode {
 
 const TYPE_LABELS: Record<string, string> = {
   invoice: "Factura",
+  invoice_issued: "Factura emisa",
+  invoice_received: "Factura primita",
   contract: "Contract",
   bank_statement: "Extras de cont",
   estimate: "Deviz",
-  unknown: "Necunoscut",
+  other: "Document",
+  unknown: "Document",
 };
 
 function friendlySize(bytes: number | null): string {
@@ -78,9 +81,24 @@ export default function DocumentExplorer() {
   const [uploadResults, setUploadResults] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
 
-  // Load folder tree on mount
+  // Load folder tree on mount + auto-poll while processing
   useEffect(() => {
     loadTree();
+
+    // Poll every 8s while any document is still processing
+    const interval = setInterval(() => {
+      api.getDocuments(100).catch(() => ({ documents: [] })).then((docData: any) => {
+        const docs = docData.documents || [];
+        const hasProcessing = docs.some(
+          (d: any) => d.processing_status === "uploaded" || d.processing_status === "parsing" || d.processing_status === "extracting"
+        );
+        if (hasProcessing || docs.length !== files.length) {
+          loadTree();
+        }
+      });
+    }, 8000);
+
+    return () => clearInterval(interval);
   }, []);
 
   async function loadTree() {
