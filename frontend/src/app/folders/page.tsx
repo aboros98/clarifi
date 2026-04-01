@@ -141,9 +141,26 @@ export default function DocumentExplorer() {
   function goToRoot() {
     setCurrentFolder(null);
     setSubfolders([]);
-    setFiles([]);
     setBreadcrumb([]);
-    loadTree();
+    // Reload everything fresh
+    setLoading(true);
+    Promise.all([
+      api.getFileTree().catch(() => ({ folders: [] })),
+      api.getDocuments(100).catch(() => ({ documents: [] })),
+    ]).then(([treeData, docData]) => {
+      setTreeFolders(treeData.folders || []);
+      setFiles(
+        (docData.documents || []).map((d: any) => ({
+          id: d.id,
+          filename: d.filename || d.original_filename,
+          mime_type: d.mime_type,
+          file_size: null,
+          status: d.processing_status,
+          extracted_entity_type: d.document_type,
+          created_at: d.created_at,
+        }))
+      );
+    }).finally(() => setLoading(false));
   }
 
   async function viewDocument(fileId: string) {

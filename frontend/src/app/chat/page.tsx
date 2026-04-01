@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  tools?: string[];
 }
 
 export default function ChatPage() {
@@ -53,6 +54,7 @@ export default function ChatPage() {
           role: "assistant",
           content:
             response.response || "Nu am putut procesa cererea. Incearca din nou.",
+          tools: response.tools_used || [],
         },
       ]);
     } catch {
@@ -103,14 +105,28 @@ export default function ChatPage() {
                 <Bot size={16} className="text-indigo-600" />
               </div>
             )}
-            <div
-              className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
-                msg.role === "user"
-                  ? "bg-indigo-600 text-white"
-                  : "bg-white border text-gray-800"
-              }`}
-            >
-              {msg.content}
+            <div className={msg.role === "user" ? "" : "space-y-1"}>
+              {msg.tools && msg.tools.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-1">
+                  {msg.tools.map((t, j) => (
+                    <span
+                      key={j}
+                      className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-500 border border-indigo-100"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div
+                className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
+                  msg.role === "user"
+                    ? "bg-indigo-600 text-white"
+                    : "bg-white border text-gray-800"
+                }`}
+              >
+                {msg.content}
+              </div>
             </div>
             {msg.role === "user" && (
               <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center shrink-0">

@@ -33,7 +33,7 @@ export const api = {
 
   // Chat
   chat: (message: string, threadId?: string) =>
-    fetchAPI<{ response: string; thread_id: string }>("/chat", {
+    fetchAPI<{ response: string; thread_id: string; tools_used?: string[] }>("/chat", {
       method: "POST",
       body: JSON.stringify({ message, thread_id: threadId }),
     }),

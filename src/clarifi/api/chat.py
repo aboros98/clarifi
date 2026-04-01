@@ -12,6 +12,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chat"])
 
 
+TOOL_LABELS = {
+    "query_cashflow": "Verific cashflow-ul",
+    "query_receivables": "Verific creantele",
+    "query_profitability": "Verific profitabilitatea",
+    "query_invoices": "Caut facturi",
+    "query_contracts": "Verific contracte",
+    "query_milestones": "Verific milestone-uri",
+    "query_alerts": "Verific alerte",
+    "query_transactions": "Caut tranzactii",
+    "extract_fields": "Extrag date din document",
+    "save_extracted_data": "Salvez date",
+    "ingest_document": "Procesez document",
+    "calculate": "Calculez",
+    "discover_data": "Verific ce date exista",
+    "search_data": "Caut in baza de date",
+    "score_client_risk": "Evaluez riscul clientului",
+    "detect_unissued_invoices": "Verific facturi neemise",
+    "project_cashflow_daily": "Proiectez cashflow",
+    "create_reminder": "Creez reminder",
+    "create_folder": "Creez folder",
+    "move_file": "Organizez fisier",
+}
+
+
 def extract_ai_response(result: dict) -> str:
     """Extract the last AI message content from agent result.
     Handles both string content and Gemini's list-of-parts format."""
@@ -20,7 +44,6 @@ def extract_ai_response(result: dict) -> str:
             content = msg.content
             if isinstance(content, str):
                 return content
-            # Gemini returns list of parts: [{'type': 'text', 'text': '...'}]
             if isinstance(content, list):
                 texts = []
                 for part in content:
@@ -32,6 +55,17 @@ def extract_ai_response(result: dict) -> str:
                     return "\n".join(texts)
             return str(content)
     return ""
+
+
+def extract_tool_calls(result: dict) -> list[str]:
+    """Extract tool names called during agent execution."""
+    tools = []
+    for msg in result.get("messages", []):
+        for tc in getattr(msg, "tool_calls", []):
+            name = tc.get("name", "")
+            if name and name not in tools:
+                tools.append(name)
+    return tools
 
 
 def _extract_user_id(request_or_ws) -> str:
@@ -116,8 +150,12 @@ async def chat_sync(request: Request):
         logger.warning("Agent returned empty response for thread %s", thread_id)
         response = "Nu am putut genera un raspuns. Incearca sa reformulezi intrebarea."
 
+    tools_used = extract_tool_calls(result)
+    tool_labels = [TOOL_LABELS.get(t, t) for t in tools_used]
+
     return {
         "response": response,
         "thread_id": thread_id,
         "user_id": user_id,
+        "tools_used": tool_labels,
     }
