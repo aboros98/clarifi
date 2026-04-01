@@ -139,7 +139,7 @@ PARTILE CONTRACTANTE:
    CUI: RO41892356, J40/5678/2021
    Sediu: Str. Victoriei nr. 45, Sector 1, Bucuresti
    Cont: RO62BRDE445SV12345678901, BRD
-   Reprezentant: Andrei Boros, Administrator
+   Reprezentant: Dan Ionescu, Administrator
 
 2. BENEFICIARUL:
    SC TechVision Romania SRL
@@ -188,7 +188,7 @@ Contractul poate fi reziliat de oricare parte cu un preaviz de
 
 PRESTATOR:                         BENEFICIAR:
 SC Digital Solutions Pro SRL       SC TechVision Romania SRL
-Andrei Boros                       Maria Popescu
+Dan Ionescu                       Maria Popescu
 Administrator                      Director General
 """)
 

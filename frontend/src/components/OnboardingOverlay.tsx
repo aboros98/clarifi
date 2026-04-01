@@ -143,7 +143,7 @@ export default function OnboardingOverlay({
                   type="text"
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
-                  placeholder="ex: Andrei Boros"
+                  placeholder="ex: Ion Popescu"
                   className="w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
