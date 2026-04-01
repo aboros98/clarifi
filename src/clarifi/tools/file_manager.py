@@ -17,20 +17,35 @@ from clarifi.models.file_tree import FileEntry, VirtualFolder
 
 @tool
 async def create_folder(name: str, parent_path: str = "/") -> dict:
-    """Create a virtual folder for organizing documents.
+    """Creaza un folder virtual. VERIFICA INTAI cu get_file_tree() daca exista deja!
     Args:
-        name — folder name (e.g., "Contracte", "Facturi 2026")
-        parent_path — parent folder path (e.g., "/" for root, "/Contracte" for subfolder)
-    Use this to organize documents into a logical structure."""
+        name — folder name (e.g., "Contracte", "RebelDot Solutions")
+        parent_path — parent folder path ("/" for root, "/Contracte" for subfolder)
+    NU crea foldere duplicate — daca exista deja, returneaza cel existent."""
 
     path = f"{parent_path.rstrip('/')}/{name}"
 
     async with get_async_session() as session:
+        # Check exact path
         existing = (await session.execute(
             select(VirtualFolder).where(VirtualFolder.path == path)
         )).scalar_one_or_none()
         if existing:
             return {"status": "exists", "id": existing.id, "path": path}
+
+        # Check by name anywhere in tree (prevent duplicates)
+        name_match = (await session.execute(
+            select(VirtualFolder).where(
+                func.lower(VirtualFolder.name) == name.lower(),
+            )
+        )).scalar_one_or_none()
+        if name_match:
+            return {
+                "status": "exists",
+                "id": name_match.id,
+                "path": name_match.path,
+                "note": f"Folder '{name}' exista deja la {name_match.path}",
+            }
 
         # Find parent
         parent_id = None
