@@ -196,7 +196,21 @@ async def _save_contract(session, data, document_id, freshness, now):
     if not data.get("contract_number"):
         return {"error": "Missing required field: contract_number"}
 
-    counterparty_id = await _find_or_create_company(session, data.get("client_tax_id"), data.get("client_name"), "client")
+    counterparty_id = await _find_or_create_company(
+        session, data.get("client_tax_id"), data.get("client_name"), "client",
+    )
+
+    # counterparty_id is NOT NULL — use own company as fallback
+    if not counterparty_id:
+        own = (await session.execute(
+            select(Company)
+            .where(Company.role == CompanyRole.OWN_COMPANY)
+            .limit(1)
+        )).scalar_one_or_none()
+        counterparty_id = own.id if own else None
+
+    if not counterparty_id:
+        return {"error": "Nu pot salva contractul — lipseste contrapartea si compania proprie"}
 
     contract = Contract(
         contract_number=data["contract_number"],
