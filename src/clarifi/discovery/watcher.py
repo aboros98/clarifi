@@ -40,9 +40,15 @@ async def process_file(file_path: Path) -> bool:
 
         graph = await get_graph()
 
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        now = datetime.now(ZoneInfo("Europe/Bucharest"))
+        timestamp = now.strftime("%d.%m.%Y, %H:%M")
+
         message = (
-            f"Document nou: {file_path.name} (la {file_path}). "
-            f"Parsează-l, extrage datele, organizează-l în folder-ul potrivit din structura virtuală, "
+            f"[{timestamp}] Document nou: {file_path.name} (la {file_path}). "
+            f"Parsează-l, extrage datele, organizează-l în folder-ul potrivit, "
             f"și creează remindere pentru deadline-uri."
         )
 

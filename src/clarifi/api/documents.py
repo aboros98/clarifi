@@ -97,16 +97,22 @@ async def _background_process(
 ):
     """Run agent in background. Updates the placeholder Document on completion."""
     try:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
         from langchain_core.messages import HumanMessage
 
         from clarifi.agent.graph import get_graph
+
+        now = datetime.now(ZoneInfo("Europe/Bucharest"))
+        timestamp = now.strftime("%d.%m.%Y, %H:%M")
 
         graph = await get_graph()
         await asyncio.wait_for(
             graph.ainvoke(
                 {
                     "messages": [HumanMessage(content=(
-                        f"Document nou: {filename} (la {file_path}). "
+                        f"[{timestamp}] Document nou: {filename} (la {file_path}). "
                         f"Document ID deja creat: {doc_id}. "
                         f"Proceseaza-l: parseaza, extrage date, salveaza, "
                         f"organizeaza in foldere, creeaza remindere. "

@@ -23,6 +23,7 @@ interface FolderNode {
   parent_id: string | null;
   file_count: number;
   trace_summary: string | null;
+  trace_content: string | null;
 }
 
 interface FileNode {
@@ -109,9 +110,11 @@ export default function DocumentExplorer() {
       ]);
       setTreeFolders(treeData.folders || []);
 
-      // Show documents as flat list when not in a folder
+      // At root: only show documents still being processed (not yet in folders)
       if (!currentFolder) {
-        const docs = docData.documents || [];
+        const docs = (docData.documents || []).filter(
+          (d: any) => d.processing_status === "uploaded" || d.processing_status === "parsing" || d.processing_status === "extracting"
+        );
         setFiles(
           docs.map((d: any) => ({
             id: d.id,
@@ -138,6 +141,7 @@ export default function DocumentExplorer() {
       setCurrentFolder({
         ...folder,
         trace_summary: data.folder?.trace_summary || null,
+        trace_content: data.folder?.trace_content || null,
       });
       setSubfolders(data.subfolders || []);
       setFiles(data.files || []);
@@ -370,11 +374,16 @@ export default function DocumentExplorer() {
         </div>
       )}
 
-      {/* Folder trace summary */}
+      {/* Folder analysis from agent */}
       {currentFolder?.trace_summary && (
         <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-800">
-          <span className="font-semibold">Analiza agentului:</span>{" "}
-          {currentFolder.trace_summary}
+          <p className="font-semibold mb-1">Analiza agentului:</p>
+          <p>{currentFolder.trace_summary}</p>
+          {currentFolder.trace_content && (
+            <p className="mt-2 text-xs text-indigo-600 whitespace-pre-wrap">
+              {currentFolder.trace_content}
+            </p>
+          )}
         </div>
       )}
 
