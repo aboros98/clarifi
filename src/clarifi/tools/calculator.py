@@ -50,7 +50,13 @@ async def calculate(expression: str) -> dict:
     Functii: abs, round, min, max, sum, len, ceil, floor, sqrt, pow, log
     """
     try:
-        # Compile to check syntax before eval
+        # Block attribute access and dunder exploits
+        if "__" in expression or "import" in expression or "exec" in expression:
+            return {
+                "error": "Expresie nepermisa",
+                "hint": "Foloseste doar numere, operatori si functii matematice",
+            }
+
         code = compile(expression, "<calc>", "eval")
 
         # Block dangerous names
