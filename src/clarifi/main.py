@@ -45,6 +45,14 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Clarifi (model=%s, db=%s)",
                 settings.llm_model, settings.database_url[:40])
 
+    # Auto-create tables on startup
+    from clarifi.db.session import engine
+    from clarifi.models import Base
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables ready")
+
     app.state.graph = await get_graph()
     logger.info("Agent graph compiled")
 
