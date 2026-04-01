@@ -1,4 +1,4 @@
-"""Document upload API — saves file, processes in background."""
+"""Document upload API — creates placeholder, processes in background."""
 
 import asyncio
 import hashlib
@@ -7,6 +7,7 @@ import mimetypes
 from pathlib import Path
 
 from fastapi import APIRouter, File, Request, UploadFile
+from sqlalchemy import select
 
 from clarifi.api.chat import _extract_user_id
 from clarifi.config import settings
@@ -23,7 +24,8 @@ async def upload_document(
     request: Request,
     file: UploadFile = File(...),
 ):
-    """Upload a document. Returns immediately, processes in background."""
+    """Upload a document. Creates a placeholder visible as 'Se analizeaza...',
+    then processes in background. The agent updates the record when done."""
     content = await file.read()
     if len(content) == 0:
         from fastapi import HTTPException
@@ -32,18 +34,16 @@ async def upload_document(
 
     filename = file.filename or "unknown"
     file_hash = hashlib.sha256(content).hexdigest()
+    user_id = _extract_user_id(request)
 
-    # Check duplicate before saving
+    # Check duplicate
     async with get_async_session() as session:
-        from sqlalchemy import select
-
         existing = (await session.execute(
             select(Document).where(
                 Document.file_hash_sha256 == file_hash,
                 Document.is_deleted == False,  # noqa: E712
             )
         )).scalar_one_or_none()
-
         if existing:
             return {
                 "status": "duplicate",
@@ -57,25 +57,42 @@ async def upload_document(
     permanent_path = storage_dir / f"{file_hash}_{filename}"
     permanent_path.write_bytes(content)
 
-    user_id = _extract_user_id(request)
+    mime_type = (
+        mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    )
 
-    # Trigger background processing — the agent's ingest_document tool
-    # will create the Document record with proper type and extract data
+    # Create placeholder record — visible immediately as "Se analizeaza..."
+    async with get_async_session() as session:
+        placeholder = Document(
+            original_filename=filename,
+            storage_path=str(permanent_path),
+            mime_type=mime_type,
+            file_size_bytes=len(content),
+            file_hash_sha256=file_hash,
+            document_type=DocumentType.OTHER,
+            processing_status=ProcessingStatus.UPLOADED,
+            user_id=user_id,
+        )
+        session.add(placeholder)
+        await session.flush()
+        doc_id = placeholder.id
+
+    # Background processing — agent will update this record
     asyncio.create_task(
-        _background_process(str(permanent_path), filename, user_id)
+        _background_process(str(permanent_path), filename, doc_id, user_id)
     )
 
     return {
         "status": "processing",
+        "document_id": doc_id,
         "filename": filename,
-        "message": "Document incarcat. Se analizeaza in fundal.",
     }
 
 
 async def _background_process(
-    file_path: str, filename: str, user_id: str,
+    file_path: str, filename: str, doc_id: str, user_id: str,
 ):
-    """Run the agent in background mode to extract + organize."""
+    """Run agent in background. Updates the placeholder Document on completion."""
     try:
         from langchain_core.messages import HumanMessage
 
@@ -87,20 +104,37 @@ async def _background_process(
                 {
                     "messages": [HumanMessage(content=(
                         f"Document nou: {filename} (la {file_path}). "
+                        f"Document ID deja creat: {doc_id}. "
                         f"Proceseaza-l: parseaza, extrage date, salveaza, "
-                        f"organizeaza in foldere, creeaza remindere."
+                        f"organizeaza in foldere, creeaza remindere. "
+                        f"IMPORTANT: documentul exista deja in DB cu ID {doc_id}, "
+                        f"NU crea alt document — foloseste acest ID."
                     ))],
                     "user_id": user_id,
                     "mode": "background",
                 },
                 config={
                     "configurable": {
-                        "thread_id": f"{user_id}:upload-{filename}",
+                        "thread_id": f"{user_id}:upload-{doc_id}",
                     },
                 },
             ),
             timeout=300,
         )
+
+        # Mark as stored
+        async with get_async_session() as session:
+            doc = await session.get(Document, doc_id)
+            if doc:
+                doc.processing_status = ProcessingStatus.STORED
         logger.info("Background processing done: %s", filename)
+
     except Exception:
         logger.exception("Background processing failed: %s", filename)
+        try:
+            async with get_async_session() as session:
+                doc = await session.get(Document, doc_id)
+                if doc:
+                    doc.processing_status = ProcessingStatus.FAILED
+        except Exception:
+            pass

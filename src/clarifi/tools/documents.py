@@ -55,31 +55,47 @@ async def ingest_document(file_path: str) -> dict:
 
     async with get_async_session() as session:
         existing = (await session.execute(
-            select(Document).where(Document.file_hash_sha256 == file_hash)
+            select(Document).where(
+                Document.file_hash_sha256 == file_hash,
+                Document.is_deleted == False,  # noqa: E712
+            )
         )).scalar_one_or_none()
-        if existing:
-            return {
-                "status": "duplicate",
-                "message": f"Document already processed (ID: {existing.id})",
-                "document_id": str(existing.id),
-            }
 
-        doc = Document(
-            original_filename=path.name,
-            storage_path=str(permanent_path),
-            mime_type=mime_type,
-            file_size_bytes=len(file_bytes),
-            file_hash_sha256=file_hash,
-            document_type=DocumentType.OTHER,
-            processing_status=ProcessingStatus.PARSED,
-            raw_text=result.text,
-            page_count=result.page_count,
-            ocr_applied=result.ocr_applied,
-            user_id=current_user_id.get(),
-        )
-        session.add(doc)
-        await session.flush()
-        doc_id = str(doc.id)
+        if existing:
+            if existing.raw_text and existing.processing_status.value not in (
+                "uploaded", "parsing",
+            ):
+                # Already fully processed
+                return {
+                    "status": "already_parsed",
+                    "document_id": str(existing.id),
+                    "text_preview": existing.raw_text[:500],
+                    "text_length": len(existing.raw_text),
+                }
+            # Placeholder from upload — update it with parsed content
+            existing.raw_text = result.text
+            existing.page_count = result.page_count
+            existing.ocr_applied = result.ocr_applied
+            existing.processing_status = ProcessingStatus.PARSED
+            existing.storage_path = str(permanent_path)
+            doc_id = str(existing.id)
+        else:
+            doc = Document(
+                original_filename=path.name,
+                storage_path=str(permanent_path),
+                mime_type=mime_type,
+                file_size_bytes=len(file_bytes),
+                file_hash_sha256=file_hash,
+                document_type=DocumentType.OTHER,
+                processing_status=ProcessingStatus.PARSED,
+                raw_text=result.text,
+                page_count=result.page_count,
+                ocr_applied=result.ocr_applied,
+                user_id=current_user_id.get(),
+            )
+            session.add(doc)
+            await session.flush()
+            doc_id = str(doc.id)
 
     return {
         "status": "parsed",
