@@ -25,6 +25,10 @@ dependencies = [
     "pillow",
     "croniter",
     "httpx",
+    "duckduckgo-search",
+    "langgraph-checkpoint-sqlite",
+    "langgraph-checkpoint-postgres",
+    "asyncpg",
 ]
 
 [project.optional-dependencies]

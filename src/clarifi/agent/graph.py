@@ -14,7 +14,6 @@ import time
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AnyMessage
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import create_react_agent
@@ -288,6 +287,23 @@ _compiled_graph = None
 _checkpointer = None
 
 
+async def _create_sqlite_checkpointer():
+    """Create SQLite checkpointer (lazy import for environments without it)."""
+    try:
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+    except ImportError:
+        logger.warning("langgraph-checkpoint-sqlite not installed, no checkpointer")
+        return None
+
+    import aiosqlite
+
+    conn = await aiosqlite.connect("memu.db")
+    saver = AsyncSqliteSaver(conn=conn)
+    await saver.setup()
+    logger.info("Checkpointer: local SQLite (memu.db)")
+    return saver
+
+
 async def get_graph():
     """Get or create the compiled graph with conversation checkpointer."""
     global _compiled_graph, _checkpointer
@@ -308,18 +324,9 @@ async def get_graph():
                     "PostgreSQL checkpointer failed, falling back to SQLite",
                     exc_info=True,
                 )
-                import aiosqlite
-
-                conn = await aiosqlite.connect("memu.db")
-                _checkpointer = AsyncSqliteSaver(conn=conn)
-                await _checkpointer.setup()
+                _checkpointer = await _create_sqlite_checkpointer()
         else:
-            import aiosqlite
-
-            conn = await aiosqlite.connect("memu.db")
-            _checkpointer = AsyncSqliteSaver(conn=conn)
-            await _checkpointer.setup()
-            logger.info("Checkpointer: local SQLite (memu.db)")
+            _checkpointer = await _create_sqlite_checkpointer()
 
         graph = build_graph()
         _compiled_graph = graph.compile(checkpointer=_checkpointer)
