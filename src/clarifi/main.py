@@ -49,9 +49,12 @@ async def lifespan(app: FastAPI):
     from clarifi.db.session import engine
     from clarifi.models import Base
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables ready")
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables ready")
+    except Exception:
+        logger.exception("Database connection failed — check DATABASE_URL")
 
     app.state.graph = await get_graph()
     logger.info("Agent graph compiled")
