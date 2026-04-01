@@ -1,4 +1,6 @@
-"""Document management API endpoints (list, details)."""
+"""Document management API endpoints (list, details, delete)."""
+
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
@@ -70,3 +72,15 @@ async def get_document(doc_id: str):
         "reviewed_by": d.reviewed_by,
         "reviewed_at": d.reviewed_at.isoformat() if d.reviewed_at else None,
     }
+
+
+@router.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str):
+    """Soft-delete a document (allows re-upload)."""
+    async with get_async_session() as session:
+        d = await session.get(Document, doc_id)
+        if not d:
+            raise HTTPException(status_code=404, detail="Document not found")
+        d.is_deleted = True
+        d.deleted_at = datetime.now(UTC)
+    return {"status": "deleted", "id": doc_id}

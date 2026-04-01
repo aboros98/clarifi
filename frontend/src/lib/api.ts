@@ -64,6 +64,8 @@ export const api = {
   // Documents
   getDocuments: (limit = 50) => fetchAPI<any>(`/api/documents?limit=${limit}`),
   getDocument: (id: string) => fetchAPI<any>(`/api/documents/${id}`),
+  deleteDocument: (id: string) =>
+    fetchAPI<any>(`/api/documents/${id}`, { method: "DELETE" }),
   uploadDocument: async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);

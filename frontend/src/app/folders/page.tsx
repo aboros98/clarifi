@@ -11,6 +11,8 @@ import {
   Eye,
   X,
   Loader2,
+  Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -402,7 +404,22 @@ export default function DocumentExplorer() {
                   )}
                 </div>
               </div>
-              <Eye size={16} className="text-gray-300 shrink-0" />
+              {f.status === "failed" ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    api.deleteDocument(f.id).then(() => loadTree());
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg shrink-0"
+                  title="Sterge si reincearca"
+                >
+                  <Trash2 size={16} />
+                </button>
+              ) : isProcessing ? (
+                <RefreshCw size={16} className="text-indigo-400 animate-spin shrink-0" />
+              ) : (
+                <Eye size={16} className="text-gray-300 shrink-0" />
+              )}
             </div>
           );
         })}
