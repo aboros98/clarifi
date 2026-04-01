@@ -82,25 +82,29 @@ export default function DocumentExplorer() {
   const [uploadResults, setUploadResults] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
 
-  // Load folder tree on mount + auto-poll while processing
+  // Load on mount
   useEffect(() => {
     loadTree();
+  }, []);
 
-    // Poll every 8s while any document is still processing
+  // Auto-poll only at root level while docs are processing
+  useEffect(() => {
+    if (currentFolder) return; // Don't poll when inside a folder
+
     const interval = setInterval(() => {
       api.getDocuments(100).catch(() => ({ documents: [] })).then((docData: any) => {
         const docs = docData.documents || [];
-        const hasProcessing = docs.some(
+        const processing = docs.filter(
           (d: any) => d.processing_status === "uploaded" || d.processing_status === "parsing" || d.processing_status === "extracting"
         );
-        if (hasProcessing || docs.length !== files.length) {
-          loadTree();
+        if (processing.length > 0) {
+          goToRoot();
         }
       });
     }, 8000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [currentFolder]);
 
   async function loadTree() {
     try {
