@@ -157,7 +157,7 @@ async def _save_invoice(session, data, document_id, freshness, now, own_id):
         return {"error": "Missing required fields: issue_date and due_date are mandatory"}
 
     company_id = await _find_or_create_company(session, data.get("vendor_or_client_tax_id"), data.get("vendor_or_client_name"), "supplier" if data.get("is_incoming") else "client")
-    contract_id = await _find_contract_by_ref(session, data.get("contract_reference"))
+    contract_id = await _find_contract_by_ref(session, data.get("contract_reference"), company_id)
 
     is_incoming = data.get("is_incoming", True)
     direction = InvoiceDirection.RECEIVED if is_incoming else InvoiceDirection.ISSUED
@@ -422,13 +422,33 @@ async def _find_or_create_company(session, tax_id: str | None, name: str | None 
     return None
 
 
-async def _find_contract_by_ref(session, ref: str | None) -> str | None:
-    if not ref:
-        return None
-    ct = (await session.execute(
-        select(Contract).where(Contract.contract_number == ref, Contract.is_deleted == False)
-    )).scalar_one_or_none()
-    return ct.id if ct else None
+async def _find_contract_by_ref(
+    session, ref: str | None, counterparty_id: str | None = None,
+) -> str | None:
+    """Find contract by reference number, or by counterparty as fallback."""
+    if ref:
+        ct = (await session.execute(
+            select(Contract).where(
+                Contract.contract_number == ref,
+                Contract.is_deleted == False,  # noqa: E712
+            )
+        )).scalar_one_or_none()
+        if ct:
+            return ct.id
+
+    # Fallback: find active contract with same counterparty
+    if counterparty_id:
+        ct = (await session.execute(
+            select(Contract).where(
+                Contract.counterparty_id == counterparty_id,
+                Contract.status == ContractStatus.ACTIVE,
+                Contract.is_deleted == False,  # noqa: E712
+            ).order_by(Contract.start_date.desc()).limit(1)
+        )).scalar_one_or_none()
+        if ct:
+            return ct.id
+
+    return None
 
 
 def _to_date(value) -> date_type | None:

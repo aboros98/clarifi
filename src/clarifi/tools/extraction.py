@@ -315,11 +315,13 @@ Returnează DOAR JSON valid:
 }}
 
 Reguli pentru remindere:
-- Factura cu scadenta → reminder 7 zile inainte + 1 zi inainte + pe data scadentei
-- Contract cu milestone → reminder 7 zile inainte de fiecare
-- Contract care expira → 30 zile + 7 zile + 1 zi inainte
-- Daca gasesti ceva neobisnuit (suma mare, penalitati, termen scurt) → reminder imediat
-- Pentru extrase bancare: nu crea remindere, dar semnaleaza tranzactii suspecte"""
+- DOAR date VIITOARE — nu crea remindere cu date din trecut
+- Factura cu scadenta viitoare → "Verifica plata factura [nr] de la [client] — [suma] lei"
+- Contract cu milestone viitor → "Milestone [nume] din contractul [nr] scadent"
+- Contract care expira → "Contractul [nr] cu [client] expira — [suma] lei"
+- FARA remindere generice ca "verificare manuala"
+- FARA remindere daca nu ai date concrete (numar, suma, client)
+- Pentru extrase bancare: nu crea remindere"""
 
 
 async def _review_extraction(

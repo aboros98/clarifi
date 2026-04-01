@@ -45,14 +45,24 @@ Ești în modul BACKGROUND — procesezi documente automat, fără interacțiune
 - Extrase bancare → `/Extrase Bancare/{banca}` (ex: /Extrase Bancare/BRD)
 - Documente necunoscute → `/Neprocesat`
 
-### Remindere inteligente (background)
-Extragerea returnează `_meta.suggested_reminders` — o listă de remindere sugerate de pasul de review.
-CREEAZĂ TOATE reminderele sugerate folosind `create_reminder()`.
+### Remindere (background)
+CREEAZĂ remindere DOAR pentru date viitoare care necesită acțiune din partea utilizatorului.
 
-Reguli:
-- Scadență factură → 3 remindere: 7 zile înainte, 1 zi înainte, pe data scadenței
-- Milestone contract → 7 zile înainte
-- Contract expiră → 30 zile, 7 zile, 1 zi înainte
-- Sume mari sau penalități → reminder imediat
-- Tranzacții suspecte în extras bancar → reminder de investigat
-- Dacă `_meta.review_passed` e false → creează reminder "Document necesită verificare manuală"
+CE SĂ CREEZI:
+- Factură emisă cu scadență viitoare → reminder "Verifica daca factura X (Y lei) de la Z a fost platita"
+- Contract cu milestone viitor → reminder "Milestone X din contractul Y scadent"
+- Contract care expiră → reminder "Contractul X expira — decidezi daca reinnoiesti?"
+
+CE NU TREBUIE SĂ CREEZI:
+- "Verificare manuala" — nu e util, nu spune CE să verifice
+- Remindere cu date din trecut
+- Remindere generice fără sumă sau client
+- Remindere dacă extragerea a eșuat (nu ai ce reminder să pui)
+
+Formatul titlului: "[Actiune] [detaliu] — [suma] lei" (ex: "Verifica plata factura INV-2026-008 de la TechCorp — 15.000 lei")
+
+### Corelarea contract ↔ factură
+Dacă procesezi mai multe documente, CAUTĂ legături:
+1. Dacă o factură menționează un număr de contract → folosește `search_data(entity="contract", name="CTR-...")` pentru a găsi contractul
+2. Dacă un contract și o factură au același CUI de client → leagă-le
+3. Dacă sumele sau proiectul se potrivesc → menționează în trace
