@@ -29,6 +29,7 @@ dependencies = [
     "langgraph-checkpoint-sqlite",
     "langgraph-checkpoint-postgres",
     "asyncpg",
+    "psycopg[binary]",
 ]
 
 [project.optional-dependencies]
