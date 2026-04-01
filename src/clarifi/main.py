@@ -51,10 +51,6 @@ async def lifespan(app: FastAPI):
 
     try:
         async with engine.begin() as conn:
-            if settings.database_url.startswith("postgresql"):
-                # Drop and recreate on PostgreSQL (timezone fix)
-                await conn.run_sync(Base.metadata.drop_all)
-                logger.info("Dropped existing tables (schema migration)")
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables ready")
     except Exception:
