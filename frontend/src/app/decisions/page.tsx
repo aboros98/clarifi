@@ -134,12 +134,26 @@ export default function ActivityPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Only show decisions that affect data — not internal lookups
+  const DECISION_TOOLS = new Set([
+    "save_extracted_data", "ingest_document", "extract_fields",
+    "confirm_data", "correct_data", "mark_invoice_paid",
+    "create_reminder", "cancel_reminder", "mark_stale",
+    "create_folder", "move_file", "write_trace",
+    "run_payment_matching", "confirm_match",
+    "calculate",
+  ]);
+
   useEffect(() => {
     async function load() {
       try {
-        const data = await api.getDecisions(100, 0);
-        setDecisions(data.decisions || []);
-        setTotal(data.total || 0);
+        const data = await api.getDecisions(200, 0);
+        const all = data.decisions || [];
+        const filtered = all.filter(
+          (d: any) => DECISION_TOOLS.has(d.tool_name),
+        );
+        setDecisions(filtered);
+        setTotal(filtered.length);
       } catch (e: any) {
         setError(e.message);
       } finally {

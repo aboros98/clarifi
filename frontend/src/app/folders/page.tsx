@@ -83,25 +83,26 @@ export default function DocumentExplorer() {
 
   async function loadTree() {
     try {
-      const data = await api.getFileTree();
-      setTreeFolders(data.folders || []);
+      const [treeData, docData] = await Promise.all([
+        api.getFileTree().catch(() => ({ folders: [] })),
+        api.getDocuments(100).catch(() => ({ documents: [] })),
+      ]);
+      setTreeFolders(treeData.folders || []);
 
-      // Also load flat document list as fallback
-      if (!data.folders?.length) {
-        const docs = await api.getDocuments(100);
-        if (docs.documents?.length) {
-          setFiles(
-            docs.documents.map((d: any) => ({
-              id: d.id,
-              filename: d.filename || d.original_filename,
-              mime_type: d.mime_type,
-              file_size: null,
-              status: d.processing_status,
-              extracted_entity_type: d.document_type,
-              created_at: d.created_at,
-            }))
-          );
-        }
+      // Show documents as flat list when not in a folder
+      if (!currentFolder) {
+        const docs = docData.documents || [];
+        setFiles(
+          docs.map((d: any) => ({
+            id: d.id,
+            filename: d.filename || d.original_filename,
+            mime_type: d.mime_type,
+            file_size: null,
+            status: d.processing_status,
+            extracted_entity_type: d.document_type,
+            created_at: d.created_at,
+          }))
+        );
       }
     } catch (e: any) {
       setError(e.message);
@@ -338,35 +339,61 @@ export default function DocumentExplorer() {
         ))}
 
         {/* Files */}
-        {files.map((f) => (
-          <div
-            key={f.id}
-            onClick={() => viewDocument(f.id)}
-            className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
-          >
-            <FileText size={20} className="text-gray-400 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{f.filename}</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                {f.extracted_entity_type && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">
-                    {TYPE_LABELS[f.extracted_entity_type] ||
-                      f.extracted_entity_type}
-                  </span>
-                )}
-                <span className="text-xs text-gray-400">
-                  {friendlyDate(f.created_at)}
-                </span>
-                {f.file_size && (
+        {files.map((f) => {
+          const isProcessing = f.status === "uploaded" || f.status === "parsing" || f.status === "extracting";
+          const STATUS_LABELS: Record<string, string> = {
+            uploaded: "Se analizeaza...",
+            parsing: "Se analizeaza...",
+            extracting: "Se extrag date...",
+            needs_review: "Necesita verificare",
+            validated: "Validat",
+            stored: "Procesat",
+            failed: "Eroare",
+          };
+          return (
+            <div
+              key={f.id}
+              onClick={() => viewDocument(f.id)}
+              className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
+            >
+              {isProcessing ? (
+                <Loader2 size={20} className="text-indigo-500 shrink-0 animate-spin" />
+              ) : (
+                <FileText size={20} className="text-gray-400 shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{f.filename}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {isProcessing && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700 animate-pulse">
+                      {STATUS_LABELS[f.status || ""] || "Se proceseaza..."}
+                    </span>
+                  )}
+                  {f.status === "failed" && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-red-50 text-red-600">
+                      Eroare la procesare
+                    </span>
+                  )}
+                  {f.extracted_entity_type && !isProcessing && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">
+                      {TYPE_LABELS[f.extracted_entity_type] ||
+                        f.extracted_entity_type}
+                    </span>
+                  )}
                   <span className="text-xs text-gray-400">
-                    {friendlySize(f.file_size)}
+                    {friendlyDate(f.created_at)}
                   </span>
-                )}
+                  {f.file_size && (
+                    <span className="text-xs text-gray-400">
+                      {friendlySize(f.file_size)}
+                    </span>
+                  )}
+                </div>
               </div>
+              <Eye size={16} className="text-gray-300 shrink-0" />
             </div>
-            <Eye size={16} className="text-gray-300 shrink-0" />
-          </div>
-        ))}
+          );
+        })}
 
         {/* Empty state */}
         {!loading &&

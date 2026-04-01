@@ -142,7 +142,7 @@ export default function RemindersPage() {
       {runs.length > 0 && (
         <div>
           <h2 className="text-sm font-semibold text-gray-500 uppercase mb-3">
-            Executii recente
+            Ce a facut agentul
           </h2>
           <div className="bg-white rounded-xl border divide-y">
             {runs.map((r) => (
