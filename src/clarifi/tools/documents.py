@@ -104,14 +104,31 @@ async def ingest_document(file_path: str) -> dict:
             await session.flush()
             doc_id = str(doc.id)
 
-        # Create FileEntry so move_file can work
-        from clarifi.models.file_tree import FileEntry
+        # Create FileEntry in default folder so move_file can work
+        from clarifi.models.file_tree import FileEntry, VirtualFolder
 
         fe_exists = (await session.execute(
             select(FileEntry).where(FileEntry.document_id == doc_id)
         )).scalar_one_or_none()
         if not fe_exists:
+            # Find or create default folder
+            default_folder = (await session.execute(
+                select(VirtualFolder).where(
+                    VirtualFolder.path == "/Neprocesat",
+                )
+            )).scalar_one_or_none()
+            if not default_folder:
+                default_folder = VirtualFolder(
+                    name="Neprocesat",
+                    path="/Neprocesat",
+                    auto_created=True,
+                    user_id=uid,
+                )
+                session.add(default_folder)
+                await session.flush()
+
             fe = FileEntry(
+                folder_id=default_folder.id,
                 document_id=doc_id,
                 filename=clean_name,
                 storage_url=str(permanent_path),
@@ -121,6 +138,10 @@ async def ingest_document(file_path: str) -> dict:
                 status="parsed",
             )
             session.add(fe)
+
+            # Update folder file count
+            default_folder.file_count = (default_folder.file_count or 0) + 1
+
             await session.flush()
             file_entry_id = str(fe.id)
         else:

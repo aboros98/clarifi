@@ -62,7 +62,8 @@ def extract_tool_calls(result: dict) -> list[str]:
     tools = []
     for msg in result.get("messages", []):
         for tc in getattr(msg, "tool_calls", []):
-            name = tc.get("name", "")
+            # tc can be dict or ToolCall object
+            name = tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "")
             if name and name not in tools:
                 tools.append(name)
     return tools

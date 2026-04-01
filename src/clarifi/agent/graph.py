@@ -206,7 +206,7 @@ async def react_agent_node(state: AgentState) -> dict:
     elapsed = int((time.monotonic() - t0) * 1000)
     n_msgs = len(result.get("messages", []))
     tool_calls = [
-        tc["name"]
+        tc.get("name", "") if isinstance(tc, dict) else getattr(tc, "name", "")
         for m in result.get("messages", [])
         for tc in getattr(m, "tool_calls", [])
     ]
