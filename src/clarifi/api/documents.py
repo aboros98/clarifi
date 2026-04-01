@@ -30,6 +30,11 @@ async def upload_document(
     """
     # Read file content
     content = await file.read()
+    if len(content) == 0:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail="Fisierul este gol")
+
     filename = file.filename or "unknown"
     file_hash = hashlib.sha256(content).hexdigest()
 

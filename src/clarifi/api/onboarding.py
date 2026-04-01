@@ -339,8 +339,9 @@ async def remove_company(request: Request, company_id: str):
             select(UserProfile).where(UserProfile.user_id == user_id)
         )).scalar_one_or_none()
         if profile and profile.company_id == company_id:
-            other = [c for c in count if c.company_id != company_id][0]
-            profile.company_id = other.company_id
+            others = [c for c in count if c.company_id != company_id]
+            if others:
+                profile.company_id = others[0].company_id
 
         session.delete(link)
 

@@ -111,8 +111,13 @@ async def chat_sync(request: Request):
         logger.exception("Agent error in /chat endpoint")
         raise HTTPException(status_code=500, detail="Eroare la procesare. Incearca din nou.")
 
+    response = extract_ai_response(result)
+    if not response:
+        logger.warning("Agent returned empty response for thread %s", thread_id)
+        response = "Nu am putut genera un raspuns. Incearca sa reformulezi intrebarea."
+
     return {
-        "response": extract_ai_response(result),
+        "response": response,
         "thread_id": thread_id,
         "user_id": user_id,
     }

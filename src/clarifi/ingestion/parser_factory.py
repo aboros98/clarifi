@@ -48,12 +48,17 @@ class ParserFactory:
         from clarifi.ingestion.docx_parser import DocxParser
         from clarifi.ingestion.image_ocr_parser import ImageOCRParser
         from clarifi.ingestion.pdf_parser import PDFParser
+        from clarifi.ingestion.xlsx_parser import XLSXParser
 
         cls._parsers.update(
             {
                 "application/pdf": PDFParser,
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document": DocxParser,
+                "application/msword": DocxParser,
                 "text/csv": CSVParser,
+                "text/plain": CSVParser,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": XLSXParser,
+                "application/vnd.ms-excel": XLSXParser,
                 "image/png": ImageOCRParser,
                 "image/jpeg": ImageOCRParser,
                 "image/tiff": ImageOCRParser,
