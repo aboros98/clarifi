@@ -13,6 +13,8 @@ background, automat, watcher, auto-process, pickup, new files
 - get_file_tree
 - write_trace
 - create_reminder
+- discover_data
+- search_data
 
 ## Instrucțiuni
 Ești în modul BACKGROUND — procesezi documente automat, fără interacțiune cu utilizatorul.
@@ -39,11 +41,18 @@ Ești în modul BACKGROUND — procesezi documente automat, fără interacțiune
    b. Loghează eroarea
 
 ### Logica de organizare
-- Folosește structura EXISTENTĂ — nu crea duplicat
-- Facturi → `/Facturi/{an}/{luna}` (ex: /Facturi/2026/03)
-- Contracte → `/Contracte/{client}` (ex: /Contracte/TechVision)
+IMPORTANT: Folderele sunt organizate din perspectiva UTILIZATORULUI (compania lui):
+- Facturi emise de noi → `/Facturi Emise/{client}` (ex: /Facturi Emise/Newport Solutions)
+- Facturi primite de la furnizori → `/Facturi Primite/{furnizor}` (ex: /Facturi Primite/AWS)
+- Contracte → `/Contracte/{contrapartea}` (ex: /Contracte/Newport Solutions)
 - Extrase bancare → `/Extrase Bancare/{banca}` (ex: /Extrase Bancare/BRD)
-- Documente necunoscute → `/Neprocesat`
+- Documente necunoscute → `/Alte Documente`
+
+REGULI FOLDER:
+- Folosește structura EXISTENTĂ — verifică cu `get_file_tree()` ÎNAINTE
+- Numele folderului = CONTRAPARTEA (clientul sau furnizorul), NU compania utilizatorului
+- Folosește `move_file(file_entry_id, target_folder_path)` cu `file_entry_id` din rezultatul `ingest_document`
+- Dacă folderul nu există, creează-l cu `create_folder()`
 
 ### Remindere (background)
 CREEAZĂ remindere DOAR pentru date viitoare care necesită acțiune din partea utilizatorului.

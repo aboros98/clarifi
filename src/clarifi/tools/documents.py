@@ -31,8 +31,8 @@ from clarifi.models.invoice import Invoice, InvoiceDirection, InvoiceStatus
 
 @tool
 async def ingest_document(file_path: str) -> dict:
-    """Parse a document (PDF, DOCX, image, CSV) and extract its text content.
-    Returns the raw text and file metadata. Use this before asking the LLM to extract structured fields.
+    """Parse a document (PDF, DOCX, image, CSV) and extract its text.
+    Returns the raw text and file metadata.
     Args: file_path — path to the file to process."""
     path = Path(file_path)
     if not path.exists():
@@ -43,15 +43,22 @@ async def ingest_document(file_path: str) -> dict:
     mime_type, _ = mimetypes.guess_type(path.name)
     mime_type = mime_type or "application/octet-stream"
 
+    # Clean filename — remove hash prefixes from upload API
+    clean_name = path.name
+    if "_" in clean_name and len(clean_name.split("_")[0]) == 64:
+        clean_name = "_".join(clean_name.split("_")[1:])
+
     parser = ParserFactory.get_parser(mime_type)
     result = await parser.parse(path)
 
-    # Copy file to permanent storage
+    # Copy to permanent storage
     processed = Path(settings.processed_dir)
     processed.mkdir(parents=True, exist_ok=True)
-    permanent_path = processed / f"{file_hash}_{path.name}"
+    permanent_path = processed / f"{file_hash}_{clean_name}"
     if not permanent_path.exists():
         shutil.copy2(str(path), str(permanent_path))
+
+    uid = current_user_id.get()
 
     async with get_async_session() as session:
         existing = (await session.execute(
@@ -65,14 +72,14 @@ async def ingest_document(file_path: str) -> dict:
             if existing.raw_text and existing.processing_status.value not in (
                 "uploaded", "parsing",
             ):
-                # Already fully processed
                 return {
                     "status": "already_parsed",
                     "document_id": str(existing.id),
                     "text_preview": existing.raw_text[:500],
                     "text_length": len(existing.raw_text),
                 }
-            # Placeholder from upload — update it with parsed content
+            # Update placeholder from upload API
+            existing.original_filename = clean_name
             existing.raw_text = result.text
             existing.page_count = result.page_count
             existing.ocr_applied = result.ocr_applied
@@ -81,7 +88,7 @@ async def ingest_document(file_path: str) -> dict:
             doc_id = str(existing.id)
         else:
             doc = Document(
-                original_filename=path.name,
+                original_filename=clean_name,
                 storage_path=str(permanent_path),
                 mime_type=mime_type,
                 file_size_bytes=len(file_bytes),
@@ -91,16 +98,39 @@ async def ingest_document(file_path: str) -> dict:
                 raw_text=result.text,
                 page_count=result.page_count,
                 ocr_applied=result.ocr_applied,
-                user_id=current_user_id.get(),
+                user_id=uid,
             )
             session.add(doc)
             await session.flush()
             doc_id = str(doc.id)
 
+        # Create FileEntry so move_file can work
+        from clarifi.models.file_tree import FileEntry
+
+        fe_exists = (await session.execute(
+            select(FileEntry).where(FileEntry.document_id == doc_id)
+        )).scalar_one_or_none()
+        if not fe_exists:
+            fe = FileEntry(
+                document_id=doc_id,
+                filename=clean_name,
+                storage_url=str(permanent_path),
+                storage_provider="local",
+                file_size=len(file_bytes),
+                mime_type=mime_type,
+                status="parsed",
+            )
+            session.add(fe)
+            await session.flush()
+            file_entry_id = str(fe.id)
+        else:
+            file_entry_id = str(fe_exists.id)
+
     return {
         "status": "parsed",
         "document_id": doc_id,
-        "filename": path.name,
+        "file_entry_id": file_entry_id,
+        "filename": clean_name,
         "mime_type": mime_type,
         "page_count": result.page_count,
         "ocr_applied": result.ocr_applied,

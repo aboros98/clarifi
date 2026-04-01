@@ -51,11 +51,14 @@ async def upload_document(
                 "filename": filename,
             }
 
-    # Save file to disk
+    # Save file to disk (hash prefix for uniqueness)
     storage_dir = Path(settings.processed_dir)
     storage_dir.mkdir(parents=True, exist_ok=True)
     permanent_path = storage_dir / f"{file_hash}_{filename}"
     permanent_path.write_bytes(content)
+
+    # Clean filename for display (remove hash prefix if present)
+    display_name = filename
 
     mime_type = (
         mimetypes.guess_type(filename)[0] or "application/octet-stream"
@@ -64,7 +67,7 @@ async def upload_document(
     # Create placeholder record — visible immediately as "Se analizeaza..."
     async with get_async_session() as session:
         placeholder = Document(
-            original_filename=filename,
+            original_filename=display_name,
             storage_path=str(permanent_path),
             mime_type=mime_type,
             file_size_bytes=len(content),
