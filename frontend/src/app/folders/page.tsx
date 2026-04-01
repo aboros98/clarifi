@@ -178,12 +178,28 @@ export default function DocumentExplorer() {
   async function uploadFiles(fileList: FileList | File[]) {
     const filesToUpload = Array.from(fileList);
     if (filesToUpload.length === 0) return;
+
+    // Validate files
+    const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+    const valid = filesToUpload.filter((f) => {
+      if (f.size === 0) {
+        setError(`${f.name} este gol`);
+        return false;
+      }
+      if (f.size > MAX_SIZE) {
+        setError(`${f.name} depaseste limita de 50MB`);
+        return false;
+      }
+      return true;
+    });
+    if (valid.length === 0) return;
+
     setUploading(true);
     setUploadResults([]);
     setError(null);
 
     const results: string[] = [];
-    for (const file of filesToUpload) {
+    for (const file of valid) {
       try {
         const res = await api.uploadDocument(file);
         if (res.status === "duplicate") {
@@ -199,14 +215,14 @@ export default function DocumentExplorer() {
 
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    loadTree();
+    goToRoot();
 
     // Poll for updates while documents are processing
     let polls = 0;
     const pollInterval = setInterval(() => {
       polls++;
-      loadTree();
-      if (polls >= 30) clearInterval(pollInterval); // stop after 5 min
+      goToRoot();
+      if (polls >= 30) clearInterval(pollInterval);
     }, 10000);
   }
 
