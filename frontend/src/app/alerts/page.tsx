@@ -40,7 +40,9 @@ export default function AlertsPage() {
                <Info size={18} className="text-blue-500 shrink-0 mt-0.5" />}
               <div className="flex-1">
                 <p className="text-sm">{alert.message}</p>
-                <span className="text-xs text-gray-400">{(alert.type || "").replace(/_/g, " ")}</span>
+                <span className="text-xs text-gray-400">
+                  {{"invoice_overdue": "Factura restanta", "milestone_overdue": "Termen depasit", "contract_expiring": "Contract expira", "cashflow_risk": "Risc cashflow", "payment_mismatch": "Plata nepotrivita"}[alert.type as string] || (alert.type || "").replace(/_/g, " ")}
+                </span>
               </div>
             </div>
           ))}

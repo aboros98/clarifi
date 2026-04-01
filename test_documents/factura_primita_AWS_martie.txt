@@ -1,0 +1,32 @@
+
+FACTURA / INVOICE
+Nr: INV-EU-2026-8834
+Data: 01.03.2026
+Scadenta: 31.03.2026
+
+FURNIZOR / SUPPLIER:
+  Amazon Web Services EMEA SARL
+  VAT: LU26888617
+  38 Avenue John F. Kennedy, L-1855 Luxembourg
+
+CLIENT / CUSTOMER:
+  SC Digital Solutions Pro SRL
+  CUI: RO41892356
+  Str. Victoriei nr. 45, Sector 1, Bucuresti, Romania
+
+SERVICII:
+  Descriere                              | Valoare (EUR)
+  ---------------------------------------+-------------
+  EC2 On-Demand (eu-central-1) - Martie  |      342,18
+  RDS PostgreSQL db.t3.medium            |      128,50
+  S3 Storage (120 GB)                    |       12,30
+  CloudFront (250 GB transfer)           |       45,00
+  Route53 Hosted Zone                     |        2,50
+
+  Subtotal:                   530,48 EUR
+  TVA (19% - taxare inversa): 100,79 EUR
+  TOTAL:                      631,27 EUR
+
+Observatii: Factura cu TVA in regim de taxare inversa (reverse charge).
+Curs BNR la 01.03.2026: 1 EUR = 4,9752 RON
+Echivalent RON: 3.140,37 lei

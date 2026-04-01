@@ -24,16 +24,17 @@ Când procesezi un document nou:
 
 IMPORTANT: NU salva fără confirmare. Arată întotdeauna ce ai extras.
 
-### Programare automată după salvare
+### Remindere inteligente după salvare
 
-După salvarea unui **CONTRACT**:
-- Pentru fiecare milestone cu dată, creează reminder 7 zile înainte
-- Pentru data de expirare, creează reminder 30 zile înainte
+Extragerea returnează `_meta.suggested_reminders` cu remindere sugerate automat.
+Creează-le pe TOATE cu `create_reminder()`, dar spune-i utilizatorului ce ai creat.
 
-După salvarea unei **FACTURI** emise:
-- Creează reminder pe data scadenței
-
-Menționează natural ce remindere ai creat.
+Reguli suplimentare:
+- Factură cu scadență → remindere la 7 zile, 1 zi, și pe data scadenței
+- Contract cu milestone → 7 zile înainte de fiecare
+- Contract care expiră → 30 zile, 7 zile, 1 zi înainte
+- Dacă review-ul a găsit probleme (`_meta.review_passed == false`), spune utilizatorului ce nu e ok
+- Dacă găsești ceva neobișnuit (sumă mare, penalități), menționează-le proactiv
 
 ## Context documente românești
 - Facturi: "FACTURA", "FACTURA FISCALA", Nr., Serie, CUI, TVA 19%

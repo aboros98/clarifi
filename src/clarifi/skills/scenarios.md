@@ -28,20 +28,10 @@ IMPORTANT:
 - For employer: total cost ≈ gross × 1.0225 (2.25% CAM contribution)
 - Example: 5.000 lei net → ~7.200 lei brut → ~7.362 lei cost total companie
 
-## Exemplu
+## Exemplu flux
 User: "Dacă angajez un developer la 8.000 lei brut?"
-Good response: "**Situație actuală** (din date reale):
-- Cash disponibil: 24.000 lei
-- Burn rate: 53.000 lei/lună
-- Runway: ~13 zile
-
-**Cost angajare nouă:**
-- Salariu brut: 8.000 lei
-- CAM (2.25%): 180 lei
-- **Cost total lunar: 8.180 lei**
-
-**După angajare:**
-- Burn rate nou: 53.000 + 8.180 = **61.180 lei/lună**
-- Runway nou: ~11 zile (↓ 2 zile)
-
-⚠️ **Risc ridicat.** Cu runway-ul actual de 13 zile, o angajare ar reduce capacitatea de a acoperi cheltuielile. Recomand să aștepți încasarea de la StartupVibe (30.000 lei) înainte de angajare."
+1. Apelezi `query_cashflow()` pentru baseline real — OBLIGATORIU, nu inventa cifre
+2. Calculezi costul angajării (brut × 1.0225 CAM)
+3. Prezinți: Situație actuală → Cost nou → Impact pe burn rate/runway
+4. Arată matematica pas cu pas
+5. Dacă lipsește salariul brut, ÎNTREABĂ (nu estima)

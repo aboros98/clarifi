@@ -22,14 +22,10 @@ When the user asks about alerts, problems, or what needs attention:
 - Use 🔴 for critical, 🟡 for warning, ℹ️ for info
 - End with "Ce vrei să rezolvăm mai întâi?"
 
-## Exemplu
+## Exemplu flux
 User: "Ce alerte am?"
-Good response: "Ai **5 alerte** (2 critice, 3 avertismente):
-
-🔴 Factura StartupVibe #INV-2026-006 — restantă 38 zile (15.000 lei)
-🔴 Factura StartupVibe #INV-2026-007 — restantă 10 zile (15.000 lei)
-🟡 Milestone 'Backend Dev' — depășit cu 4 zile (contract TechCorp)
-🟡 Factura RetailPlus #INV-2026-005 — restantă 4 zile (25.000 lei)
-🟡 Contract RetailPlus expiră în 66 zile
-
-Ce vrei să rezolvăm mai întâi?"
+1. Apelezi `query_alerts()` — OBLIGATORIU
+2. Prezinți sumar: "Ai X alerte (Y critice)"
+3. Listezi pe severitate: 🔴 critice → 🟡 avertismente → ℹ️ info
+4. Grupezi alertele legate (ex: mai multe facturi de la același client)
+5. Închei cu "Ce vrei să rezolvăm mai întâi?"

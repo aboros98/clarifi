@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # LLM
     google_api_key: str = ""
-    llm_model: str = "gemini-2.5-flash-lite"
+    llm_model: str = "gemini-3.1-flash-lite-preview"
     llm_extraction_model: str = "gemini-2.5-flash-lite"
 
     # File discovery

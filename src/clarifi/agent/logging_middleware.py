@@ -6,10 +6,11 @@ Does NOT mutate original tool objects (Pydantic v2 forbids setattr on models).
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from langchain_core.tools import StructuredTool
 
+from clarifi.agent.context import current_user_id
 from clarifi.db.session import get_async_session
 from clarifi.models.decision_log import DecisionLog
 
@@ -39,13 +40,14 @@ async def _log_tool_call(
     try:
         async with get_async_session() as session:
             log = DecisionLog(
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 session_id=session_id,
                 decision_type="tool_call",
                 tool_name=tool_name,
                 tool_input=_serialize_safe(tool_input),
                 tool_output=_serialize_safe(tool_output),
                 duration_ms=duration_ms,
+                user_id=current_user_id.get(),
             )
             session.add(log)
     except Exception:

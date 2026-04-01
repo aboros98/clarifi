@@ -1,10 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, Play, Trash2, CheckCircle, XCircle, Pause } from "lucide-react";
+import { Clock, Bell, Trash2, CheckCircle, XCircle, CalendarDays } from "lucide-react";
 import { api } from "@/lib/api";
 
-export default function JobsPage() {
+const TYPE_LABELS: Record<string, string> = {
+  alert_eval: "Verificare alerte",
+  digest: "Raport periodic",
+  reminder: "Reminder",
+  follow_up: "Urmarire",
+  recurring: "Recurent",
+  one_shot: "O singura data",
+};
+
+function friendlyType(raw: string): string {
+  return TYPE_LABELS[raw] || raw.replace(/_/g, " ");
+}
+
+function friendlyDate(iso: string | null): string {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleDateString("ro-RO", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export default function RemindersPage() {
   const [tasks, setTasks] = useState<any[]>([]);
   const [runs, setRuns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,7 +39,7 @@ export default function JobsPage() {
       try {
         const [taskData, runData] = await Promise.all([
           api.getTasks(),
-          api.getRuns(20),
+          api.getRuns(10),
         ]);
         setTasks(taskData.tasks || []);
         setRuns(runData.runs || []);
@@ -33,138 +57,127 @@ export default function JobsPage() {
       await api.deleteTask(id);
       setTasks((prev) => prev.filter((t) => t.id !== id));
     } catch (e: any) {
-      setError(`Nu am putut șterge: ${e.message}`);
+      setError(`Nu am putut sterge: ${e.message}`);
     }
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold mb-1">Jobs & Scheduler</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        Task-uri programate si istoricul executiilor
-      </p>
-
-      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
-
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-          <Clock size={20} /> Task-uri Programate
-        </h2>
-        <div className="bg-white rounded-xl border overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-              <tr>
-                <th className="px-4 py-3 text-left">Titlu</th>
-                <th className="px-4 py-3 text-left">Tip</th>
-                <th className="px-4 py-3 text-left">Cron</th>
-                <th className="px-4 py-3 text-left">Urmatoarea executie</th>
-                <th className="px-4 py-3 text-left">Executii</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {tasks.map((t) => (
-                <tr key={t.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">{t.title}</td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100">
-                      {t.schedule_type}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500">
-                    {t.cron_expression || "-"}
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {t.next_run_at
-                      ? new Date(t.next_run_at).toLocaleString("ro-RO")
-                      : "-"}
-                  </td>
-                  <td className="px-4 py-3">{t.run_count}</td>
-                  <td className="px-4 py-3">
-                    {t.is_active ? (
-                      <span className="flex items-center gap-1 text-green-600 text-xs">
-                        <Play size={12} /> Activ
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-gray-400 text-xs">
-                        <Pause size={12} /> Inactiv
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {t.is_active && (
-                      <button
-                        onClick={() => handleDelete(t.id)}
-                        className="text-red-400 hover:text-red-600"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {tasks.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                    Niciun task programat
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Run History */}
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-8">
       <div>
-        <h2 className="text-lg font-semibold mb-3">Istoric Executii</h2>
-        <div className="bg-white rounded-xl border overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-              <tr>
-                <th className="px-4 py-3 text-left">Data</th>
-                <th className="px-4 py-3 text-left">Task</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Durata</th>
-                <th className="px-4 py-3 text-left">Eroare</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {runs.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-xs">
-                    {new Date(r.started_at).toLocaleString("ro-RO")}
-                  </td>
-                  <td className="px-4 py-3">{r.task_id.slice(0, 8)}...</td>
-                  <td className="px-4 py-3">
-                    {r.status === "success" ? (
-                      <CheckCircle size={16} className="text-green-500" />
-                    ) : r.status === "failed" ? (
-                      <XCircle size={16} className="text-red-500" />
-                    ) : (
-                      <Clock size={16} className="text-yellow-500" />
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {r.duration_ms ? `${r.duration_ms}ms` : "-"}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-red-500 truncate max-w-xs">
-                    {r.error_message || "-"}
-                  </td>
-                </tr>
-              ))}
-              {runs.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
-                    Nicio executie inregistrata
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Bell size={24} /> Remindere
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Remindere si verificari automate create de agent
+        </p>
       </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Active reminders */}
+      <div className="space-y-3">
+        {tasks.map((t) => (
+          <div
+            key={t.id}
+            className="bg-white rounded-xl border p-4 flex items-start gap-4"
+          >
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                t.is_active ? "bg-indigo-100" : "bg-gray-100"
+              }`}
+            >
+              <Clock
+                size={20}
+                className={t.is_active ? "text-indigo-600" : "text-gray-400"}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-sm">{t.title}</h3>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                  {friendlyType(t.task_type || t.schedule_type)}
+                </span>
+                {t.is_active ? (
+                  <span className="text-xs text-green-600">Activ</span>
+                ) : (
+                  <span className="text-xs text-gray-400">Inactiv</span>
+                )}
+              </div>
+              {t.next_run_at && (
+                <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                  <CalendarDays size={12} />
+                  Urmatoarea: {friendlyDate(t.next_run_at)}
+                </p>
+              )}
+              {t.run_count > 0 && (
+                <p className="text-xs text-gray-400">
+                  Executat de {t.run_count} ori
+                </p>
+              )}
+            </div>
+            {t.is_active && (
+              <button
+                onClick={() => handleDelete(t.id)}
+                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg shrink-0"
+                title="Sterge reminder"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
+        ))}
+        {tasks.length === 0 && !loading && (
+          <div className="bg-white rounded-xl border p-8 text-center text-gray-400 text-sm">
+            Niciun reminder activ. Agentul va crea remindere automat cand
+            gaseste deadline-uri in documente.
+          </div>
+        )}
+      </div>
+
+      {/* Recent activity */}
+      {runs.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-500 uppercase mb-3">
+            Executii recente
+          </h2>
+          <div className="bg-white rounded-xl border divide-y">
+            {runs.map((r) => (
+              <div key={r.id} className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  {r.status === "success" ? (
+                    <CheckCircle size={16} className="text-green-500 shrink-0" />
+                  ) : (
+                    <XCircle size={16} className="text-red-500 shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {r.task_title || "Agent"}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {friendlyDate(r.started_at)}
+                      {r.duration_ms ? ` (${(r.duration_ms / 1000).toFixed(1)}s)` : ""}
+                    </p>
+                  </div>
+                  {r.error_message && (
+                    <span className="text-xs text-red-400 truncate max-w-[200px]">
+                      {r.error_message}
+                    </span>
+                  )}
+                </div>
+                {r.output && (
+                  <p className="text-xs text-gray-500 mt-1 pl-7 line-clamp-2">
+                    {r.output}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

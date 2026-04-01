@@ -1,12 +1,13 @@
 """Scheduling and reminder tools."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from langchain_core.tools import tool
 from sqlalchemy import select
 
+from clarifi.agent.context import current_user_id
 from clarifi.db.session import get_async_session
-from clarifi.models.scheduled_task import ScheduleType, ScheduledTask
+from clarifi.models.scheduled_task import ScheduledTask, ScheduleType
 
 
 @tool
@@ -30,7 +31,7 @@ async def create_reminder(
         recurring — True pentru remindere recurente
         cron — expresie cron pentru recurente (ex: '0 8 * * 1' pentru luni 8:00)
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Parse 'when'
     if "day" in when.lower():
@@ -43,7 +44,7 @@ async def create_reminder(
         try:
             run_at = datetime.fromisoformat(when)
             if run_at.tzinfo is None:
-                run_at = run_at.replace(tzinfo=timezone.utc)
+                run_at = run_at.replace(tzinfo=UTC)
         except ValueError:
             run_at = now + timedelta(days=1)
 
@@ -60,7 +61,7 @@ async def create_reminder(
             created_by_agent=True,
             trigger_flow_type="conversation",
             trigger_message=message,
-            user_id=user_id or None,
+            user_id=user_id or current_user_id.get() or None,
             related_entity_type=entity_type or None,
             related_entity_id=entity_id or None,
             notification_channels=["app"],

@@ -9,6 +9,7 @@ The agent uses these to organize user's documents into a logical tree:
 from langchain_core.tools import tool
 from sqlalchemy import func, select
 
+from clarifi.agent.context import current_user_id
 from clarifi.db.session import get_async_session
 from clarifi.models.document import Document
 from clarifi.models.file_tree import FileEntry, VirtualFolder
@@ -45,6 +46,7 @@ async def create_folder(name: str, parent_path: str = "/") -> dict:
             parent_id=parent_id,
             path=path,
             auto_created=True,
+            user_id=current_user_id.get(),
         )
         session.add(folder)
         await session.flush()
@@ -163,7 +165,7 @@ async def organize_inbox() -> dict:
                 select(VirtualFolder).where(VirtualFolder.path == path)
             )).scalar_one_or_none()
             if not existing:
-                f = VirtualFolder(name=name, path=path, auto_created=True)
+                f = VirtualFolder(name=name, path=path, auto_created=True, user_id=current_user_id.get())
                 session.add(f)
                 await session.flush()
                 folder_ids[path] = f.id

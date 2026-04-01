@@ -1,0 +1,31 @@
+
+FACTURA PROFORMA
+Nr: CLR-2026-0043
+Data: 25.03.2026
+Scadenta: 24.04.2026
+
+FURNIZOR:
+  SC Digital Solutions Pro SRL
+  CUI: RO41892356
+  J40/5678/2021
+  Str. Victoriei nr. 45, Bucuresti
+  IBAN: RO62BRDE445SV12345678901 - BRD
+
+CATRE:
+  SC RetailMax Distribution SRL
+  CUI: RO29384756
+  J23/7890/2018
+  Str. Fabricii nr. 10, Timisoara, Timis
+  IBAN: RO15INGB0001008765432109 - ING
+
+DETALII:
+  1. Implementare sistem ERP - Faza 1     | 45.000,00 lei
+     (Analiza cerinte, design, prototip)
+  2. Licente software (12 luni)            | 12.000,00 lei
+  3. Training echipa (3 zile x 4 pers)     |  7.200,00 lei
+
+  Subtotal:      64.200,00 lei
+  TVA 19%:       12.198,00 lei
+  TOTAL:         76.398,00 lei
+
+Mod de plata: 50% avans la semnarea contractului, 50% la livrare.

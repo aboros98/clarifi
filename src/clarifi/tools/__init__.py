@@ -1,7 +1,12 @@
 """Clarifi tools — Python functions callable by the LLM via tool-calling."""
 
 from clarifi.tools.alerts import query_alerts
-from clarifi.tools.analysis import detect_unissued_invoices, project_cashflow_daily, score_client_risk
+from clarifi.tools.analysis import (
+    detect_unissued_invoices,
+    project_cashflow_daily,
+    score_client_risk,
+)
+from clarifi.tools.calculator import calculate
 from clarifi.tools.clarification import ask_user
 from clarifi.tools.cloud_sync import sync_google_drive, upload_to_storage
 from clarifi.tools.contracts import query_contracts, query_milestones
@@ -72,4 +77,6 @@ ALL_TOOLS = [
     create_reminder,
     list_reminders,
     cancel_reminder,
+    # Calculator
+    calculate,
 ]

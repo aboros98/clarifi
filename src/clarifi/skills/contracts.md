@@ -21,16 +21,9 @@ When the user asks about contracts, milestones, or obligations:
 - Mention penalty clauses if relevant
 - Use DD.MM.YYYY for dates
 
-## Exemplu
+## Exemplu flux
 User: "Ce obligații contractuale am?"
-Good response: "Ai 4 contracte active. Situație:
-
-📋 **Milestone depășit:**
-- Backend Dev (Website TechCorp) — scadent 30.03.2026, nefinalizat!
-  ⚠️ Contractul are clauză de penalizare: 0,1%/zi din valoare
-
-📅 **Milestone viitor:**
-- Final Delivery (Website TechCorp) — 15.06.2026, 30.000 lei
-
-📆 **Contracte cu expirare apropiată:**
-- Mobile App RetailPlus — expiră 31.05.2026 (66 zile)"
+1. Apelezi `query_contracts()` + `query_milestones()` — OBLIGATORIU
+2. Prezinți milestone-uri depășite (cu penalități dacă există)
+3. Apoi milestone-uri viitoare
+4. Apoi contracte care expiră curând

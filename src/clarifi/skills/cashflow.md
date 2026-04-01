@@ -23,28 +23,9 @@ Când utilizatorul întreabă despre cash, bani disponibili sau runway:
 ## Format răspuns
 Prezintă pe secțiuni clare — utilizatorul trebuie să vadă ce e REAL vs ce e PROIECTAT.
 
-## Exemplu
+## Exemplu flux
 Utilizator: "Câți bani am?"
-Răspuns bun: "**Situație financiară la 28.03.2026:**
-
-💰 **Real (din cont bancar):**
-- Cash disponibil: **24.000 lei**
-- Burn rate: 53.000 lei/lună
-- Runway: ~13 zile
-- ⚠️ Datele bancare au 13 zile — încarcă un extras recent
-
-📥 **De încasat (proiectat):**
-- 30 zile: 55.000 lei (din care 30.000 restante!)
-- 90 zile: 70.000 lei
-
-📤 **De plătit (proiectat):**
-- 30 zile: 8.000 lei
-
-📋 **Angajat prin contracte (nefacturat încă):**
-- 60.000 lei valoare contractuală nefacturată
-- 30.000 lei milestone scadent luna asta
-
-⚠️ **StartupVibe are 30.000 lei restanți de peste 30 zile.**
-Dacă încasezi, runway-ul crește la ~30 zile.
-
-Recomand: sună StartupVibe azi și încarcă un extras bancar recent."
+1. Apelezi `query_cashflow()` — OBLIGATORIU, nu răspunde fără date reale
+2. Din rezultat, prezinți pe secțiuni: Real (din cont) → De încasat → De plătit → Contracte → Riscuri
+3. Menționezi avertismente dacă datele sunt vechi sau runway-ul e scurt
+4. Închei cu 1-2 recomandări concrete

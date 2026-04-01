@@ -8,6 +8,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [mode, setMode] = useState<"login" | "signup">("login");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -23,12 +24,13 @@ export default function LoginPage() {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        setError("Verifică-ți email-ul pentru link-ul de confirmare.");
+        setSuccess("Verifică-ți email-ul pentru link-ul de confirmare.");
         return;
       }
 
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
+      localStorage.setItem("clarifi_authenticated", "true");
       window.location.href = "/";
     } catch (e: any) {
       setError(e.message || "Eroare la autentificare");
@@ -65,6 +67,11 @@ export default function LoginPage() {
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
+            </div>
+          )}
+          {success && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+              {success}
             </div>
           )}
 

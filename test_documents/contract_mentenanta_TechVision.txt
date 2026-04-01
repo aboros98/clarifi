@@ -1,0 +1,63 @@
+
+CONTRACT DE PRESTARI SERVICII
+Nr. DSP/2026/015
+Data: 01.02.2026
+
+PARTILE CONTRACTANTE:
+
+1. PRESTATORUL:
+   SC Digital Solutions Pro SRL
+   CUI: RO41892356, J40/5678/2021
+   Sediu: Str. Victoriei nr. 45, Sector 1, Bucuresti
+   Cont: RO62BRDE445SV12345678901, BRD
+   Reprezentant: Andrei Boros, Administrator
+
+2. BENEFICIARUL:
+   SC TechVision Romania SRL
+   CUI: RO38745612, J12/3456/2019
+   Sediu: Bd. Unirii nr. 22, Cluj-Napoca
+   Reprezentant: Maria Popescu, Director General
+
+Art. 1 - OBIECTUL CONTRACTULUI
+Prestatorul se obliga sa furnizeze servicii de mentenanta si dezvoltare
+software pentru platforma web a Beneficiarului, conform specificatiilor
+din Anexa 1.
+
+Art. 2 - VALOAREA CONTRACTULUI
+Valoarea totala: 180.000 lei (una suta optzeci mii lei) + TVA
+Plata se face lunar, in rate egale de 15.000 lei + TVA / luna.
+
+Art. 3 - DURATA
+Contractul este valabil pe o perioada de 12 luni, de la 01.02.2026
+pana la 31.01.2027, cu posibilitate de prelungire prin act aditional.
+
+Art. 4 - OBLIGATIILE PRESTATORULUI
+a) Sa asigure mentenanta preventiva si corectiva a platformei
+b) Sa rezolve bugurile critice in maxim 4 ore lucratoare
+c) Sa livreze update-uri de securitate in maxim 24 ore
+d) Sa asigure disponibilitate 99.5% (uptime SLA)
+
+Art. 5 - MILESTONE-URI
+  M1: Audit tehnic initial - 28.02.2026 - 10.000 lei
+  M2: Migare infrastructure cloud - 30.04.2026 - 25.000 lei
+  M3: Redesign modul raportare - 30.06.2026 - 20.000 lei
+  M4: Implementare API v2 - 30.09.2026 - 30.000 lei
+
+Art. 6 - PENALITATI
+In cazul nerespectarii termenelor de livrare, Prestatorul va plati
+penalitati de 0,05% din valoarea milestone-ului pentru fiecare zi
+calendaristica de intarziere, dar nu mai mult de 10% din valoare.
+
+Art. 7 - CONFIDENTIALITATE
+Partile se obliga sa pastreze confidentialitatea informatiilor
+obtinute in cadrul executarii contractului pe o perioada de 2 ani
+de la incetarea acestuia.
+
+Art. 8 - REZILIEREA
+Contractul poate fi reziliat de oricare parte cu un preaviz de
+30 de zile calendaristice, transmis in scris.
+
+PRESTATOR:                         BENEFICIAR:
+SC Digital Solutions Pro SRL       SC TechVision Romania SRL
+Andrei Boros                       Maria Popescu
+Administrator                      Director General

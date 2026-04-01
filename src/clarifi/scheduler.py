@@ -95,7 +95,7 @@ async def _execute_task(task: ScheduledTask) -> tuple[str, str | None]:
         task.notification_channels if isinstance(task.notification_channels, list) else None,
     )
 
-    return "success", None
+    return "success", response, None
 
 
 async def process_due_tasks():
@@ -138,10 +138,11 @@ async def process_due_tasks():
         started_at = datetime.now(timezone.utc)
         status = "failed"
         error_msg = None
+        response = None
 
         try:
             logger.info("Executing: %s (type=%s)", td["title"], td["task_type"])
-            status, error_msg = await _execute_task(_TaskProxy(td))
+            status, response, error_msg = await _execute_task(_TaskProxy(td))
             logger.info("  Completed: %s", status)
         except Exception as e:
             error_msg = str(e)
@@ -149,12 +150,12 @@ async def process_due_tasks():
 
         completed_at = datetime.now(timezone.utc)
         duration_ms = int((completed_at - started_at).total_seconds() * 1000)
-        results.append((td, started_at, completed_at, status, error_msg, duration_ms))
+        results.append((td, started_at, completed_at, status, response, error_msg, duration_ms))
 
     # Step 3: Record results and update tasks in a fresh session
     async with async_session_factory() as session:
-        for td, started_at, completed_at, status, error_msg, duration_ms in results:
-            # Record run
+        for td, started_at, completed_at, status, response, error_msg, duration_ms in results:
+            # Record run with agent output
             run = SchedulerRun(
                 task_id=td["id"],
                 started_at=started_at,
@@ -162,6 +163,7 @@ async def process_due_tasks():
                 status=status,
                 duration_ms=duration_ms,
                 error_message=error_msg,
+                output={"response": response[:2000]} if response else None,
             )
             session.add(run)
 

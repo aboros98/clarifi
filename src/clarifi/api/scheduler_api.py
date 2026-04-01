@@ -63,16 +63,27 @@ async def list_runs(
             q = q.where(SchedulerRun.task_id == task_id)
         runs = (await session.execute(q.limit(limit))).scalars().all()
 
+        # Fetch task titles for display
+        task_ids = {r.task_id for r in runs}
+        tasks = {}
+        if task_ids:
+            task_rows = (await session.execute(
+                select(ScheduledTask).where(ScheduledTask.id.in_(task_ids))
+            )).scalars().all()
+            tasks = {t.id: t.title for t in task_rows}
+
     return {
         "runs": [
             {
                 "id": r.id,
                 "task_id": r.task_id,
+                "task_title": tasks.get(r.task_id, ""),
                 "started_at": r.started_at.isoformat(),
                 "completed_at": r.completed_at.isoformat() if r.completed_at else None,
                 "status": r.status,
                 "duration_ms": r.duration_ms,
                 "error_message": r.error_message,
+                "output": r.output.get("response", "") if r.output else None,
             }
             for r in runs
         ]

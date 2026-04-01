@@ -1,25 +1,101 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FolderOpen, Plus, Trash2, RefreshCw, Cloud, HardDrive } from "lucide-react";
+import {
+  FolderOpen,
+  Folder,
+  FileText,
+  ChevronRight,
+  ArrowLeft,
+  Upload,
+  Eye,
+  X,
+} from "lucide-react";
 import { api } from "@/lib/api";
 
-export default function FoldersPage() {
-  const [folders, setFolders] = useState<any[]>([]);
+interface FolderNode {
+  id: string;
+  name: string;
+  path: string;
+  parent_id: string | null;
+  file_count: number;
+  trace_summary: string | null;
+}
+
+interface FileNode {
+  id: string;
+  filename: string;
+  mime_type: string | null;
+  file_size: number | null;
+  status: string | null;
+  extracted_entity_type: string | null;
+  created_at: string | null;
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  invoice: "Factura",
+  contract: "Contract",
+  bank_statement: "Extras de cont",
+  estimate: "Deviz",
+  unknown: "Necunoscut",
+};
+
+function friendlySize(bytes: number | null): string {
+  if (!bytes) return "-";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function friendlyDate(iso: string | null): string {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleDateString("ro-RO", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export default function DocumentExplorer() {
+  const [treeFolders, setTreeFolders] = useState<FolderNode[]>([]);
+  const [currentFolder, setCurrentFolder] = useState<FolderNode | null>(null);
+  const [subfolders, setSubfolders] = useState<FolderNode[]>([]);
+  const [files, setFiles] = useState<FileNode[]>([]);
+  const [breadcrumb, setBreadcrumb] = useState<FolderNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newPath, setNewPath] = useState("");
-  const [newName, setNewName] = useState("");
 
+  // Document viewer
+  const [viewingDoc, setViewingDoc] = useState<any>(null);
+  const [docLoading, setDocLoading] = useState(false);
+
+  // Load folder tree on mount
   useEffect(() => {
-    loadFolders();
+    loadTree();
   }, []);
 
-  async function loadFolders() {
+  async function loadTree() {
     try {
-      const data = await api.getFolders();
-      setFolders(data.folders || []);
+      const data = await api.getFileTree();
+      setTreeFolders(data.folders || []);
+
+      // Also load flat document list as fallback
+      if (!data.folders?.length) {
+        const docs = await api.getDocuments(100);
+        if (docs.documents?.length) {
+          setFiles(
+            docs.documents.map((d: any) => ({
+              id: d.id,
+              filename: d.filename || d.original_filename,
+              mime_type: d.mime_type,
+              file_size: null,
+              status: d.processing_status,
+              extracted_entity_type: d.document_type,
+              created_at: d.created_at,
+            }))
+          );
+        }
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -27,122 +103,261 @@ export default function FoldersPage() {
     }
   }
 
-  async function handleAdd() {
-    if (!newPath.trim()) return;
+  async function openFolder(folder: FolderNode) {
+    setLoading(true);
     try {
-      await api.addFolder({
-        provider: "local",
-        folder_path: newPath.trim(),
-        display_name: newName.trim() || newPath.trim(),
+      const data = await api.getFolder(folder.id);
+      setCurrentFolder({
+        ...folder,
+        trace_summary: data.folder?.trace_summary || null,
       });
-      setNewPath("");
-      setNewName("");
-      setShowAdd(false);
-      setError(null);
-      loadFolders();
+      setSubfolders(data.subfolders || []);
+      setFiles(data.files || []);
+
+      // Update breadcrumb
+      const idx = breadcrumb.findIndex((b) => b.id === folder.id);
+      if (idx >= 0) {
+        setBreadcrumb(breadcrumb.slice(0, idx + 1));
+      } else {
+        setBreadcrumb([...breadcrumb, folder]);
+      }
     } catch (e: any) {
-      setError(`Nu am putut adăuga: ${e.message}`);
+      setError(e.message);
+    } finally {
+      setLoading(false);
     }
   }
 
-  async function handleRemove(id: string) {
-    await api.removeFolder(id);
-    setFolders((prev) => prev.filter((f) => f.id !== id));
+  function goToRoot() {
+    setCurrentFolder(null);
+    setSubfolders([]);
+    setFiles([]);
+    setBreadcrumb([]);
+    loadTree();
   }
 
+  async function viewDocument(fileId: string) {
+    setDocLoading(true);
+    try {
+      const doc = await api.getDocument(fileId);
+      setViewingDoc(doc);
+    } catch (e: any) {
+      setError(`Nu pot deschide: ${e.message}`);
+    } finally {
+      setDocLoading(false);
+    }
+  }
+
+  // Root folders (no parent)
+  const rootFolders = treeFolders.filter((f) => !f.parent_id);
+
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <FolderOpen size={24} />
-          <div>
-            <h1 className="text-2xl font-bold">Folder Manager</h1>
-            <p className="text-sm text-gray-500">Foldere monitorizate pentru documente noi</p>
-          </div>
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <FolderOpen size={24} /> Documente
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Documentele tale organizate de agent
+          </p>
         </div>
-        <button
-          onClick={() => setShowAdd(!showAdd)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm"
-        >
-          <Plus size={16} /> Adauga folder
-        </button>
       </div>
 
-      {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+          {error}
+          <button
+            onClick={() => setError(null)}
+            className="ml-2 text-red-400 hover:text-red-600"
+          >
+            <X size={14} className="inline" />
+          </button>
+        </div>
+      )}
 
-      {showAdd && (
-        <div className="mb-6 bg-white rounded-xl border p-4">
-          <h3 className="text-sm font-semibold mb-3">Folder Nou</h3>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={newPath}
-              onChange={(e) => setNewPath(e.target.value)}
-              placeholder="Cale folder (ex: /Users/docs/facturi)"
-              className="flex-1 px-3 py-2 rounded-lg border text-sm"
-            />
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Nume (optional)"
-              className="w-48 px-3 py-2 rounded-lg border text-sm"
-            />
-            <button
-              onClick={handleAdd}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
-            >
-              Salveaza
-            </button>
+      {/* Breadcrumb */}
+      {breadcrumb.length > 0 && (
+        <div className="flex items-center gap-1 text-sm">
+          <button
+            onClick={goToRoot}
+            className="text-indigo-600 hover:underline flex items-center gap-1"
+          >
+            <ArrowLeft size={14} /> Toate
+          </button>
+          {breadcrumb.map((b, i) => (
+            <span key={b.id} className="flex items-center gap-1">
+              <ChevronRight size={14} className="text-gray-400" />
+              {i < breadcrumb.length - 1 ? (
+                <button
+                  onClick={() => openFolder(b)}
+                  className="text-indigo-600 hover:underline"
+                >
+                  {b.name}
+                </button>
+              ) : (
+                <span className="text-gray-700 font-medium">{b.name}</span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Folder trace summary */}
+      {currentFolder?.trace_summary && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm text-indigo-800">
+          <span className="font-semibold">Analiza agentului:</span>{" "}
+          {currentFolder.trace_summary}
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="bg-white rounded-xl border divide-y">
+        {/* Subfolders */}
+        {(currentFolder ? subfolders : rootFolders).map((f) => (
+          <div
+            key={f.id}
+            onClick={() => openFolder(f)}
+            className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
+          >
+            <Folder size={20} className="text-yellow-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{f.name}</p>
+              {f.trace_summary && (
+                <p className="text-xs text-gray-400 truncate">
+                  {f.trace_summary}
+                </p>
+              )}
+            </div>
+            <span className="text-xs text-gray-400 shrink-0">
+              {f.file_count || 0} fisiere
+            </span>
+            <ChevronRight size={16} className="text-gray-300 shrink-0" />
+          </div>
+        ))}
+
+        {/* Files */}
+        {files.map((f) => (
+          <div
+            key={f.id}
+            onClick={() => viewDocument(f.id)}
+            className="px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
+          >
+            <FileText size={20} className="text-gray-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{f.filename}</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                {f.extracted_entity_type && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">
+                    {TYPE_LABELS[f.extracted_entity_type] ||
+                      f.extracted_entity_type}
+                  </span>
+                )}
+                <span className="text-xs text-gray-400">
+                  {friendlyDate(f.created_at)}
+                </span>
+                {f.file_size && (
+                  <span className="text-xs text-gray-400">
+                    {friendlySize(f.file_size)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <Eye size={16} className="text-gray-300 shrink-0" />
+          </div>
+        ))}
+
+        {/* Empty state */}
+        {!loading &&
+          (currentFolder ? subfolders : rootFolders).length === 0 &&
+          files.length === 0 && (
+            <div className="px-4 py-12 text-center">
+              <Upload size={32} className="text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-gray-400">
+                Niciun document inca. Incarca documente prin chat sau pune-le
+                in folderul inbox/.
+              </p>
+            </div>
+          )}
+      </div>
+
+      {/* Document viewer overlay */}
+      {viewingDoc && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <div className="min-w-0">
+                <h2 className="font-semibold truncate">
+                  {viewingDoc.filename}
+                </h2>
+                <div className="flex items-center gap-2 mt-1">
+                  {viewingDoc.document_type && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">
+                      {TYPE_LABELS[viewingDoc.document_type] ||
+                        viewingDoc.document_type}
+                    </span>
+                  )}
+                  {viewingDoc.extraction_confidence && (
+                    <span className="text-xs text-gray-400">
+                      {Math.round(viewingDoc.extraction_confidence * 100)}%
+                      incredere
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-400">
+                    {friendlyDate(viewingDoc.created_at)}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingDoc(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {viewingDoc.raw_text ? (
+                <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono bg-gray-50 rounded-xl p-4 border">
+                  {viewingDoc.raw_text}
+                </pre>
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-8">
+                  Continutul documentului nu este disponibil.
+                </p>
+              )}
+
+              {/* Extracted data */}
+              {viewingDoc.extraction_raw_response && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold text-gray-600 mb-2">
+                    Date extrase
+                  </h3>
+                  <pre className="text-xs text-gray-600 bg-gray-50 rounded-xl p-4 border overflow-x-auto max-h-60">
+                    {typeof viewingDoc.extraction_raw_response === "string"
+                      ? viewingDoc.extraction_raw_response
+                      : JSON.stringify(
+                          viewingDoc.extraction_raw_response,
+                          null,
+                          2
+                        )}
+                  </pre>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      <div className="bg-white rounded-xl border divide-y">
-        {folders.map((f) => (
-          <div key={f.id} className="px-4 py-4 flex items-center gap-4">
-            {f.provider === "google_drive" ? (
-              <Cloud size={20} className="text-blue-500 shrink-0" />
-            ) : (
-              <HardDrive size={20} className="text-gray-500 shrink-0" />
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-sm">{f.display_name}</div>
-              <div className="text-xs text-gray-400 truncate">
-                {f.folder_path || f.folder_id}
-              </div>
-            </div>
-            <div className="text-xs text-gray-500">
-              {f.files_processed} fisiere procesate
-            </div>
-            <div className="text-xs">
-              {f.is_active ? (
-                <span className="text-green-600">Activ</span>
-              ) : (
-                <span className="text-gray-400">Inactiv</span>
-              )}
-            </div>
-            <div className="text-xs text-gray-400">
-              {f.last_synced_at
-                ? `Sync: ${new Date(f.last_synced_at).toLocaleDateString("ro-RO")}`
-                : "Nesincronizat"}
-            </div>
-            {f.is_active && (
-              <button
-                onClick={() => handleRemove(f.id)}
-                className="text-red-400 hover:text-red-600"
-              >
-                <Trash2 size={16} />
-              </button>
-            )}
-          </div>
-        ))}
-        {!loading && folders.length === 0 && (
-          <div className="px-4 py-8 text-center text-gray-400">
-            Niciun folder monitorizat. Adauga unul pentru a incepe.
-          </div>
-        )}
-      </div>
+      {/* Loading overlay for doc viewer */}
+      {docLoading && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
     </div>
   );
 }

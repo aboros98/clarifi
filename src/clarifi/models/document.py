@@ -54,6 +54,11 @@ class Document(Base, AuditMixin, SoftDeleteMixin):
     )
     document_date: Mapped[datetime | None] = mapped_column(nullable=True)
 
+    # Owner — links document to the user who uploaded it
+    user_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True,
+    )
+
     processing_status: Mapped[ProcessingStatus] = mapped_column(
         Enum(ProcessingStatus, name="processing_status_enum"),
         default=ProcessingStatus.UPLOADED,

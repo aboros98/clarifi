@@ -1,0 +1,34 @@
+
+FACTURA FISCALA
+Nr: CLR-2026-0042
+Data emiterii: 15.03.2026
+Data scadentei: 14.04.2026
+
+FURNIZOR:
+  SC Digital Solutions Pro SRL
+  CUI: RO41892356
+  J40/5678/2021
+  Str. Victoriei nr. 45, Sector 1, Bucuresti
+  Cont: RO62BRDE445SV12345678901 - BRD
+  Email: office@digitalsolutions.ro
+
+CLIENT:
+  SC TechVision Romania SRL
+  CUI: RO38745612
+  J12/3456/2019
+  Bd. Unirii nr. 22, Cluj-Napoca
+  Cont: RO89RNCB0082044258710001 - BCR
+
+PRODUSE/SERVICII:
+  Nr | Descriere                          | UM   | Cant | Pret unitar | Valoare
+  ---+------------------------------------+------+------+-------------+---------
+   1 | Dezvoltare aplicatie web - Sprint 3 | ore  |  120 |     250,00  | 30.000,00
+   2 | Mentenanta lunara hosting           | luna |    1 |   1.500,00  |  1.500,00
+   3 | Consultanta tehnica                 | ore  |   16 |     350,00  |  5.600,00
+
+  Subtotal:                           37.100,00 lei
+  TVA (19%):                           7.049,00 lei
+  TOTAL DE PLATA:                     44.149,00 lei
+
+Curs BNR: N/A (factura in lei)
+Mentiuni: Plata prin transfer bancar in contul indicat.

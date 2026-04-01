@@ -1,18 +1,32 @@
+import logging
 from pathlib import Path
 
 import pypdf
 
 from clarifi.ingestion.parser_factory import ParseResult
 
+logger = logging.getLogger(__name__)
+
 
 class PDFParser:
     async def parse(self, file_path: Path) -> ParseResult:
-        reader = pypdf.PdfReader(str(file_path))
-        pages: list[str] = []
+        try:
+            reader = pypdf.PdfReader(str(file_path))
+        except Exception:
+            logger.warning("Failed to read PDF: %s", file_path.name, exc_info=True)
+            return ParseResult(
+                text="[PDF corupt sau format nesuportat]",
+                page_count=0,
+                ocr_applied=False,
+            )
 
+        pages: list[str] = []
         for page in reader.pages:
-            text = page.extract_text() or ""
-            pages.append(text)
+            try:
+                text = page.extract_text() or ""
+                pages.append(text)
+            except Exception:
+                pages.append("")
 
         full_text = "\n\n".join(pages)
 
@@ -32,11 +46,15 @@ class PDFParser:
             from pdf2image import convert_from_path
             import pytesseract
 
-            images = convert_from_path(str(file_path))
+            images = convert_from_path(str(file_path), dpi=200)
             texts = []
-            for img in images:
-                text = pytesseract.image_to_string(img, lang="ron+eng")
-                texts.append(text)
+            for i, img in enumerate(images):
+                try:
+                    text = pytesseract.image_to_string(img, lang="ron+eng")
+                    texts.append(text)
+                except Exception:
+                    logger.warning("OCR failed on page %d of %s", i + 1, file_path.name)
+                    texts.append("")
 
             return ParseResult(
                 text="\n\n".join(texts),
@@ -45,7 +63,14 @@ class PDFParser:
             )
         except ImportError:
             return ParseResult(
-                text="[OCR required but pdf2image not installed]",
+                text="[OCR necesar dar pdf2image nu e instalat]",
+                page_count=page_count,
+                ocr_applied=False,
+            )
+        except Exception:
+            logger.warning("OCR fallback failed for %s", file_path.name, exc_info=True)
+            return ParseResult(
+                text="[OCR a esuat]",
                 page_count=page_count,
                 ocr_applied=False,
             )

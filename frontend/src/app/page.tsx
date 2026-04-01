@@ -125,7 +125,7 @@ export default function DashboardPage() {
                     </p>
                   </div>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
-                    {t.schedule_type}
+                    {t.schedule_type === "recurring" ? "Recurent" : "O data"}
                   </span>
                 </div>
               ))}
@@ -138,21 +138,44 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Recent Agent Activity */}
+      {kpis?.recent_activity?.length > 0 && (
+        <div className="bg-white rounded-xl border">
+          <div className="px-5 py-4 border-b">
+            <h2 className="font-semibold text-sm">Ce a facut agentul recent</h2>
+          </div>
+          <div className="divide-y">
+            {kpis.recent_activity.map((a: any, i: number) => (
+              <div key={i} className="px-5 py-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${a.status === "success" ? "bg-green-500" : "bg-red-500"}`} />
+                  <span className="text-sm font-medium">{a.title}</span>
+                  <span className="text-xs text-gray-400">
+                    {new Date(a.timestamp).toLocaleDateString("ro-RO", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 pl-4">{a.summary}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Quick Actions */}
       <div className="bg-white rounded-xl border px-5 py-4">
-        <h2 className="font-semibold text-sm mb-3">Acțiuni rapide</h2>
+        <h2 className="font-semibold text-sm mb-3">Actiuni rapide</h2>
         <div className="flex flex-wrap gap-2">
           <Link
             href="/chat"
             className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm hover:bg-indigo-100 transition-colors"
           >
-            💬 Întreabă agentul
+            💬 Intreaba agentul
           </Link>
           <Link
             href="/folders"
             className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-700 rounded-lg text-sm hover:bg-gray-100 transition-colors"
           >
-            <FileText size={14} /> Încarcă documente
+            <FileText size={14} /> Incarca documente
           </Link>
           <Link
             href="/alerts"

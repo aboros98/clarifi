@@ -32,7 +32,7 @@ class ExtractedInvoice(BaseModel):
     contract_reference: str | None = None
     payment_reference: str | None = None
     line_items: list[dict] = []
-    field_confidences: dict[str, float] = {}
+    field_confidences: dict = {}
 
 class ExtractedContract(BaseModel):
     document_type: str = "contract"
@@ -49,7 +49,7 @@ class ExtractedContract(BaseModel):
     milestones: list[dict] = []
     penalties: list[str] = []
     obligations: list[str] = []
-    field_confidences: dict[str, float] = {}
+    field_confidences: dict = {}
 
 class ExtractedBankStatement(BaseModel):
     document_type: str = "bank_statement"
@@ -61,12 +61,27 @@ class ExtractedBankStatement(BaseModel):
     closing_balance: float | None = None
     currency: str = "RON"
     transactions: list[dict] = []
-    field_confidences: dict[str, float] = {}
+    field_confidences: dict = {}
+
+class ExtractedEstimate(BaseModel):
+    document_type: str = "estimate"
+    estimate_number: str | None = None
+    client_name: str | None = None
+    client_tax_id: str | None = None
+    issue_date: str | None = None
+    valid_until: str | None = None
+    subtotal: float | None = None
+    vat_amount: float | None = None
+    total_amount: float | None = None
+    currency: str = "RON"
+    line_items: list[dict] = []
+    field_confidences: dict = {}
 
 SCHEMAS = {
     "invoice": ExtractedInvoice,
     "contract": ExtractedContract,
     "bank_statement": ExtractedBankStatement,
+    "estimate": ExtractedEstimate,
 }
 
 
@@ -161,22 +176,49 @@ async def extract_fields(text: str, document_type: str = "auto") -> dict:
         HumanMessage(content=prompt),
     ])
 
-    # Parsează răspunsul
-    content = response.content.strip()
-    if content.startswith("```"):
-        content = content.split("\n", 1)[1] if "\n" in content else content[3:]
-    if content.endswith("```"):
-        content = content[:-3]
+    # Parsează răspunsul — handle string and list-of-parts format
+    raw_content = response.content
+    if isinstance(raw_content, list):
+        content = " ".join(
+            p["text"] if isinstance(p, dict) and p.get("text") else str(p)
+            for p in raw_content
+        )
+    else:
+        content = str(raw_content)
     content = content.strip()
+
+    # Strip markdown code blocks (```json ... ```)
+    import re as _re
+    md_match = _re.search(r"```(?:json)?\s*\n?(.*?)```", content, _re.DOTALL)
+    if md_match:
+        content = md_match.group(1).strip()
+    elif content.startswith("```"):
+        content = content.split("\n", 1)[-1]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
 
     try:
         raw = json.loads(content)
     except json.JSONDecodeError:
-        return {
-            "error": "Nu am putut parsa răspunsul LLM ca JSON",
-            "raw_response": content[:2000],
-            "document_type": document_type,
-        }
+        # Try to find JSON object in the text
+        brace_start = content.find("{")
+        brace_end = content.rfind("}")
+        if brace_start >= 0 and brace_end > brace_start:
+            try:
+                raw = json.loads(content[brace_start:brace_end + 1])
+            except json.JSONDecodeError:
+                return {
+                    "error": "Nu am putut parsa răspunsul LLM ca JSON",
+                    "raw_response": content[:2000],
+                    "document_type": document_type,
+                }
+        else:
+            return {
+                "error": "Nu am putut parsa răspunsul LLM ca JSON",
+                "raw_response": content[:2000],
+                "document_type": document_type,
+            }
 
     # Validare Pydantic — normalizează și completează câmpuri lipsă
     schema_cls = SCHEMAS.get(document_type)
@@ -190,19 +232,125 @@ async def extract_fields(text: str, document_type: str = "auto") -> dict:
     else:
         extracted = raw
 
-    # Calculează încrederea medie
+    # Coerce critical fields to prevent DB type errors
+    for str_field in ("invoice_number", "contract_number", "vendor_or_client_name", "vendor_or_client_tax_id", "bank_name", "account_iban"):
+        if str_field in extracted and extracted[str_field] is not None:
+            extracted[str_field] = str(extracted[str_field])
+    for num_field in ("total_amount", "vat_amount", "subtotal", "total_value", "opening_balance", "closing_balance"):
+        if num_field in extracted and extracted[num_field] is not None:
+            try:
+                extracted[num_field] = float(extracted[num_field])
+            except (TypeError, ValueError):
+                extracted[num_field] = None
+
+    # Calculează încrederea medie (flatten nested dicts from LLM)
     field_confs = extracted.get("field_confidences", {})
-    avg_confidence = (
-        sum(field_confs.values()) / len(field_confs) if field_confs else 0.5
+    flat_values = []
+    for v in (field_confs.values() if field_confs else []):
+        if isinstance(v, (int, float)):
+            flat_values.append(float(v))
+        elif isinstance(v, dict):
+            flat_values.extend(
+                float(x) for x in v.values() if isinstance(x, (int, float))
+            )
+    avg_confidence = sum(flat_values) / len(flat_values) if flat_values else 0.5
+
+    # --- Pass 2: LLM Review — validate extraction + find insights ---
+    review_result = await _review_extraction(
+        llm, text[:8000], document_type, extracted,
     )
+    if review_result and isinstance(review_result, dict):
+        try:
+            corrections = review_result.get("corrections", {})
+            if isinstance(corrections, dict):
+                for field, value in corrections.items():
+                    if field in extracted and value is not None:
+                        extracted[field] = value
+                        logger.info("Review corrected %s.%s", document_type, field)
+        except Exception:
+            logger.warning("Failed to apply review corrections", exc_info=True)
 
     extracted["_meta"] = {
         "document_type": document_type,
         "avg_confidence": avg_confidence,
-        "fields_extracted": len([v for v in extracted.values() if v is not None and v != "" and v != []]),
+        "fields_extracted": len([
+            v for v in extracted.values()
+            if v is not None and v != "" and v != []
+        ]),
         "text_truncated": was_truncated,
         "text_length": len(text),
         "validated": schema_cls is not None,
+        "review_passed": review_result.get("valid", True) if review_result else None,
+        "review_issues": review_result.get("issues", []) if review_result else [],
+        "suggested_reminders": review_result.get("reminders", []) if review_result else [],
     }
 
     return extracted
+
+
+REVIEW_PROMPT = """Ești un auditor financiar care verifică date extrase automat dintr-un document.
+
+Document original (primele caractere):
+{original_text}
+
+Date extrase ({doc_type}):
+{extracted_json}
+
+Verifică:
+1. Numerele au sens? (total = subtotal + TVA, sumele sunt rezonabile)
+2. Datele sunt logice? (scadența e DUPĂ emitere, perioada nu e în viitor extrem)
+3. CUI-ul e valid? (format RO + cifre)
+4. Direcția facturii (is_incoming) e corectă?
+5. Ce remindere inteligente ar trebui create?
+
+Returnează DOAR JSON valid:
+{{
+  "valid": true/false,
+  "issues": ["problema 1", "problema 2"],
+  "corrections": {{"field_name": "corrected_value"}},
+  "reminders": [
+    {{"title": "Scadenta factura X", "when": "YYYY-MM-DD", "priority": "high/medium/low", "message": "ce sa verifice"}},
+    {{"title": "Reminder 1 sapt inainte", "when": "YYYY-MM-DD", "priority": "medium", "message": "..."}}
+  ]
+}}
+
+Reguli pentru remindere:
+- Factura cu scadenta → reminder 7 zile inainte + 1 zi inainte + pe data scadentei
+- Contract cu milestone → reminder 7 zile inainte de fiecare
+- Contract care expira → 30 zile + 7 zile + 1 zi inainte
+- Daca gasesti ceva neobisnuit (suma mare, penalitati, termen scurt) → reminder imediat
+- Pentru extrase bancare: nu crea remindere, dar semnaleaza tranzactii suspecte"""
+
+
+async def _review_extraction(
+    llm, original_text: str, doc_type: str, extracted: dict,
+) -> dict | None:
+    """Second LLM pass: validate extraction and suggest reminders."""
+    try:
+        # Remove _meta and field_confidences for cleaner review
+        clean = {
+            k: v for k, v in extracted.items()
+            if k not in ("_meta", "field_confidences")
+        }
+
+        response = await llm.ainvoke([
+            SystemMessage(
+                content="Ești un auditor financiar precis. Returnezi DOAR JSON.",
+            ),
+            HumanMessage(content=REVIEW_PROMPT.format(
+                original_text=original_text,
+                doc_type=doc_type,
+                extracted_json=json.dumps(clean, ensure_ascii=False, indent=2),
+            )),
+        ])
+
+        content = response.content.strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+
+        return json.loads(content.strip())
+    except Exception:
+        logger.warning("Extraction review failed", exc_info=True)
+        return None

@@ -12,6 +12,7 @@ The inbox/ is just a drop zone — files leave it once processed.
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 
 from langchain_core.messages import HumanMessage
@@ -20,7 +21,14 @@ from clarifi.config import settings
 
 logger = logging.getLogger("clarifi.watcher")
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".png", ".jpg", ".jpeg", ".tiff", ".csv", ".xlsx"}
+SUPPORTED_EXTENSIONS = {
+    ".pdf", ".docx", ".doc", ".txt",
+    ".png", ".jpg", ".jpeg", ".tiff",
+    ".csv", ".xlsx", ".xls",
+}
+
+_failed_files: dict[str, float] = {}  # path → time.monotonic() of last failure
+_RETRY_COOLDOWN = 300  # 5 minutes
 
 
 async def process_file(file_path: Path) -> bool:
@@ -75,15 +83,28 @@ async def watch_directory(
 
     while True:
         try:
+            now_mono = time.monotonic()
+
+            # Clean up old entries from _failed_files (older than 1 hour)
+            stale = [
+                p for p, t in _failed_files.items()
+                if now_mono - t > 3600
+            ]
+            for p in stale:
+                del _failed_files[p]
+
             new_files = [
                 f for f in inbox.iterdir()
-                if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS
+                if f.is_file()
+                and f.suffix.lower() in SUPPORTED_EXTENSIONS
+                and _failed_files.get(str(f), 0) + _RETRY_COOLDOWN < now_mono
             ]
 
             if new_files:
                 logger.info("Found %d new file(s)", len(new_files))
                 for f in new_files:
-                    await process_file(f)
+                    if not await process_file(f):
+                        _failed_files[str(f)] = time.monotonic()
 
         except asyncio.CancelledError:
             logger.info("Watcher stopped")

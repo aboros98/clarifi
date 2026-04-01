@@ -20,13 +20,9 @@ When the user asks about profitability, margins, or project performance:
 - Use 🟢 for healthy (>20% margin), 🟡 for thin (5-20%), 🔴 for loss (<5%)
 - Mention budget usage where available
 
-## Exemplu
+## Exemplu flux
 User: "Ce proiecte sunt pe pierdere?"
-Good response: "Profitabilitate per proiect (costuri facturate, fără salarii):
-
-🟢 SEO TechCorp: +30.000 lei (marjă 100%)
-🟢 Website TechCorp: +55.000 lei (marjă 73%)
-🔴 **Mobile RetailPlus: -750 lei (marjă -1%, buget folosit 92%)**
-🟡 CRM StartupVibe: +0 lei (marjă 0% — dar facturile nu sunt încasate)
-
-⚠️ Proiectul Mobile App e aproape de pierdere. Verifică costurile suplimentare cu freelancerul."
+1. Apelezi `query_profitability()` — OBLIGATORIU
+2. Prezinți profitul global, apoi per proiect (sortat de la cel mai slab)
+3. Folosești 🟢/🟡/🔴 pe baza marjei reale din tool
+4. Menționezi că sunt doar costuri facturate, fără salarii

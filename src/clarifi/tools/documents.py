@@ -11,6 +11,7 @@ from pathlib import Path
 from langchain_core.tools import tool
 from sqlalchemy import select
 
+from clarifi.agent.context import current_user_id
 from clarifi.config import settings
 from clarifi.db.session import get_async_session
 from clarifi.ingestion.parser_factory import ParserFactory
@@ -24,6 +25,7 @@ from clarifi.models.contract import (
     ContractStatus,
 )
 from clarifi.models.document import Document, DocumentType, ProcessingStatus
+from clarifi.models.estimate import Estimate, EstimateLineItem, EstimateStatus
 from clarifi.models.invoice import Invoice, InvoiceDirection, InvoiceStatus
 
 
@@ -73,6 +75,7 @@ async def ingest_document(file_path: str) -> dict:
             raw_text=result.text,
             page_count=result.page_count,
             ocr_applied=result.ocr_applied,
+            user_id=current_user_id.get(),
         )
         session.add(doc)
         await session.flush()
@@ -92,9 +95,9 @@ async def ingest_document(file_path: str) -> dict:
 
 @tool
 async def save_extracted_data(entity_type: str, data: dict, document_id: str = "", confirmed: bool = False) -> dict:
-    """Save extracted data to the database. Supports: invoice, contract, bank_statement.
+    """Save extracted data to the database. Supports: invoice, contract, bank_statement, estimate.
     Args:
-        entity_type — 'invoice', 'contract', or 'bank_statement'
+        entity_type — 'invoice', 'contract', 'bank_statement', or 'estimate'
         data — extracted fields as a dict
         document_id — the source document ID from ingest_document
         confirmed — True if user has confirmed the data is correct
@@ -111,7 +114,9 @@ async def save_extracted_data(entity_type: str, data: dict, document_id: str = "
         own = (await session.execute(
             select(Company).where(Company.role == CompanyRole.OWN_COMPANY, Company.is_deleted == False)
         )).scalar_one_or_none()
-        own_id = own.id if own else "unknown"
+        if not own:
+            return {"error": "Nicio companie configurata. Finalizeaza onboarding-ul mai intai."}
+        own_id = own.id
 
         if entity_type == "invoice":
             result = await _save_invoice(session, data, document_id, freshness, now, own_id)
@@ -128,8 +133,18 @@ async def save_extracted_data(entity_type: str, data: dict, document_id: str = "
             if validation_warnings:
                 result["warnings"] = validation_warnings
             return result
+        elif entity_type == "estimate":
+            result = await _save_estimate(
+                session, data, document_id, freshness, now, own_id,
+            )
+            if validation_warnings:
+                result["warnings"] = validation_warnings
+            return result
         else:
-            return {"error": f"Unknown entity_type '{entity_type}'. Supported: invoice, contract, bank_statement"}
+            return {
+                "error": f"Unknown entity_type '{entity_type}'. "
+                "Supported: invoice, contract, bank_statement, estimate",
+            }
 
 
 async def _save_invoice(session, data, document_id, freshness, now, own_id):
@@ -145,14 +160,14 @@ async def _save_invoice(session, data, document_id, freshness, now, own_id):
     total = _safe_decimal(data.get("total_amount"))
     vat = _safe_decimal(data.get("vat_amount"))
     subtotal_raw = _safe_decimal(data.get("subtotal"))
-    subtotal = subtotal_raw if subtotal_raw > 0 else (total - vat)
+    subtotal = subtotal_raw if subtotal_raw > 0 else (total - vat if total > 0 else Decimal("0"))
 
     inv = Invoice(
         invoice_number=data.get("invoice_number", "UNKNOWN"),
         direction=direction,
         status=InvoiceStatus.RECEIVED if is_incoming else InvoiceStatus.SENT,
-        issuer_company_id=company_id if is_incoming else own_id,
-        recipient_company_id=own_id if is_incoming else (company_id or "unknown"),
+        issuer_company_id=(company_id or own_id) if is_incoming else own_id,
+        recipient_company_id=own_id if is_incoming else (company_id or own_id),
         contract_id=contract_id,
         issue_date=_to_date(data["issue_date"]),
         due_date=_to_date(data["due_date"]),
@@ -181,12 +196,12 @@ async def _save_contract(session, data, document_id, freshness, now):
     contract = Contract(
         contract_number=data["contract_number"],
         title=data.get("contract_number", "Untitled"),
-        counterparty_id=counterparty_id or "unknown",
+        counterparty_id=counterparty_id,
         total_value=_safe_decimal(data.get("total_value")),
         currency=data.get("currency", "RON"),
-        start_date=_to_date(data.get("start_date")) or date_type.today(),
+        start_date=_to_date(data.get("start_date")),
         end_date=_to_date(data.get("end_date")),
-        signed_date=_to_date(data.get("contract_date")),
+        signed_date=_to_date(data.get("contract_date") or data.get("start_date")),
         status=ContractStatus.ACTIVE,
         payment_terms_days=data.get("payment_terms_days"),
         billing_frequency=data.get("billing_frequency"),
@@ -240,6 +255,63 @@ async def _save_contract(session, data, document_id, freshness, now):
     }
 
 
+async def _save_estimate(session, data, document_id, freshness, now, own_id):
+    if not data.get("estimate_number"):
+        return {"error": "Missing required field: estimate_number"}
+
+    client_id = await _find_or_create_company(
+        session,
+        data.get("client_tax_id"),
+        data.get("client_name"),
+        "client",
+    )
+
+    total = _safe_decimal(data.get("total_amount"))
+    vat = _safe_decimal(data.get("vat_amount"))
+    subtotal_raw = _safe_decimal(data.get("subtotal"))
+    subtotal = subtotal_raw if subtotal_raw > 0 else (
+        total - vat if total > 0 else Decimal("0")
+    )
+
+    est = Estimate(
+        estimate_number=data["estimate_number"],
+        title=data.get("estimate_number", "Deviz"),
+        client_company_id=client_id or own_id,
+        issue_date=_to_date(data.get("issue_date")) or date_type.today(),
+        valid_until=_to_date(data.get("valid_until")) or date_type.today(),
+        subtotal=subtotal,
+        vat_amount=vat,
+        total_amount=total,
+        currency=data.get("currency", "RON"),
+        status=EstimateStatus.DRAFT,
+        source_document_id=document_id or None,
+        freshness_status=freshness,
+        verified_at=now if freshness == "verified" else None,
+        data_source="extraction",
+    )
+    session.add(est)
+    await session.flush()
+
+    # Save line items
+    for i, item in enumerate(data.get("line_items", [])):
+        li = EstimateLineItem(
+            estimate_id=est.id,
+            line_number=i + 1,
+            description=str(item.get("description", "")),
+            quantity=_safe_decimal(item.get("quantity", 1)),
+            unit=item.get("unit"),
+            unit_price=_safe_decimal(item.get("unit_price", 0)),
+            line_total=_safe_decimal(item.get("amount", 0)),
+        )
+        session.add(li)
+
+    return {
+        "status": "saved",
+        "entity_type": "estimate",
+        "id": str(est.id),
+    }
+
+
 async def _save_bank_statement(session, data, document_id, freshness, now):
     iban = data.get("account_iban", "UNKNOWN")
     currency = data.get("currency", "RON")
@@ -248,11 +320,16 @@ async def _save_bank_statement(session, data, document_id, freshness, now):
     if not transactions:
         return {"error": "No transactions found in bank statement data"}
 
+    opening = _safe_decimal(data.get("opening_balance"))
+    running_balance = opening
+
     saved = 0
     for txn in transactions:
         amount = _safe_decimal(txn.get("amount"))
         tx_type = TransactionType.CREDIT if amount >= 0 else TransactionType.DEBIT
         abs_amount = abs(amount)
+
+        running_balance = running_balance + amount
 
         bt = BankTransaction(
             bank_account_iban=iban,
@@ -264,6 +341,7 @@ async def _save_bank_statement(session, data, document_id, freshness, now):
             reference=txn.get("reference"),
             counterparty_name=txn.get("counterparty"),
             counterparty_iban=txn.get("counterparty_iban"),
+            balance_after=running_balance,
             is_matched=False,
             source_document_id=document_id or None,
             freshness_status=freshness,
@@ -273,18 +351,29 @@ async def _save_bank_statement(session, data, document_id, freshness, now):
         session.add(bt)
         saved += 1
 
-    # Set balance_after on last transaction if closing_balance provided
-    closing = data.get("closing_balance")
-    if closing is not None and saved > 0:
-        bt.balance_after = _safe_decimal(closing)
-
     await session.flush()
-    return {
+
+    # Validate closing balance matches running total
+    closing = _safe_decimal(data.get("closing_balance"))
+    warnings = []
+    if closing > 0 and abs(running_balance - closing) > Decimal("1"):
+        warnings.append(
+            f"Sold final calculat ({running_balance}) difera de "
+            f"sold final din extras ({closing}). Diferenta: "
+            f"{running_balance - closing}"
+        )
+
+    result = {
         "status": "saved",
         "entity_type": "bank_statement",
         "transactions_saved": saved,
         "iban": iban,
+        "opening_balance": str(opening),
+        "closing_balance_calculated": str(running_balance),
     }
+    if warnings:
+        result["warnings"] = warnings
+    return result
 
 
 async def _find_or_create_company(session, tax_id: str | None, name: str | None = None, role: str = "client") -> str | None:

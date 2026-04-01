@@ -1,5 +1,6 @@
 [build]
 builder = "nixpacks"
+buildCommand = "pip install -e '.[dev]' && pip install -e './memU[postgres]' || true"
 
 [deploy]
 startCommand = "uvicorn clarifi.main:app --host 0.0.0.0 --port $PORT"

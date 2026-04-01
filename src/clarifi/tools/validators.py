@@ -137,15 +137,13 @@ def _validate_cui(value: str) -> tuple[str, str | None]:
 
     # Should be RO + 1-13 digits, or just digits
     digits_only = re.sub(r"[^0-9]", "", cleaned)
-    has_ro = cleaned.startswith("RO")
-
     if not digits_only:
         return value, f"CUI/CIF invalid: '{value}' (no digits found)"
 
     if len(digits_only) < 1 or len(digits_only) > 13:
         return value, f"CUI/CIF suspicious length: '{value}' ({len(digits_only)} digits)"
 
-    normalized = f"RO{digits_only}" if not has_ro else f"RO{digits_only}"
+    normalized = f"RO{digits_only}"
     return normalized, None
 
 

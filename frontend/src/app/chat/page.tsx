@@ -14,7 +14,7 @@ export default function ChatPage() {
     {
       role: "assistant",
       content:
-        "Buna! Sunt Clarifi, asistentul tau financiar. Cu ce te pot ajuta?\n\nPoti intreba:\n- Cati bani am?\n- Cine imi datoreaza bani?\n- Ce alerte am?\n- Ce trebuie sa fac saptamana asta?",
+        "Salut! Sunt Clarifi, asistentul tau financiar.\n\nIncearca sa ma intrebi:\n- Cati bani am in cont?\n- Cine imi datoreaza bani?\n- Ce facturi am restante?\n- Ce trebuie sa fac saptamana asta?",
     },
   ]);
   const [input, setInput] = useState("");
@@ -51,13 +51,18 @@ export default function ChatPage() {
         ...prev,
         {
           role: "assistant",
-          content: response.response || "Nu am putut procesa cererea.",
+          content:
+            response.response || "Nu am putut procesa cererea. Incearca din nou.",
         },
       ]);
-    } catch (e: any) {
+    } catch {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: `Eroare: ${e.message}` },
+        {
+          role: "assistant",
+          content:
+            "A aparut o eroare. Verifica conexiunea si incearca din nou.",
+        },
       ]);
     } finally {
       setLoading(false);
@@ -67,12 +72,12 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-screen">
       {/* Header */}
-      <div className="px-6 py-3 border-b bg-white flex items-center justify-between">
+      <div className="px-4 sm:px-6 py-3 border-b bg-white flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold">Agent Chat</h1>
+          <h1 className="text-lg font-semibold">Chat cu Clarifi</h1>
           <p className="text-xs text-gray-500">
             {threadId
-              ? `Thread: ${threadId.slice(0, 8)}... (agentul isi aminteste conversatia)`
+              ? "Agentul isi aminteste conversatia"
               : "Conversatie noua"}
           </p>
         </div>
@@ -80,12 +85,12 @@ export default function ChatPage() {
           onClick={handleNewChat}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border hover:bg-gray-50"
         >
-          <Plus size={14} /> Conversatie noua
+          <Plus size={14} /> Nou
         </button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
         {messages.map((msg, i) => (
           <div
             key={i}
@@ -99,7 +104,7 @@ export default function ChatPage() {
               </div>
             )}
             <div
-              className={`max-w-[70%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
+              className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
                 msg.role === "user"
                   ? "bg-indigo-600 text-white"
                   : "bg-white border text-gray-800"
@@ -120,7 +125,7 @@ export default function ChatPage() {
               <Loader2 size={16} className="text-indigo-600 animate-spin" />
             </div>
             <div className="bg-white border rounded-2xl px-4 py-3 text-sm text-gray-400">
-              Analizez...
+              Analizez datele...
             </div>
           </div>
         )}
@@ -128,14 +133,14 @@ export default function ChatPage() {
       </div>
 
       {/* Input */}
-      <div className="px-6 py-4 border-t bg-white">
+      <div className="px-4 sm:px-6 py-4 border-t bg-white">
         <div className="flex gap-2 max-w-3xl mx-auto">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Intreaba ceva... (ex: Cati bani am?)"
+            placeholder="Scrie o intrebare... (ex: Cati bani am?)"
             className="flex-1 px-4 py-3 rounded-xl border bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             disabled={loading}
           />

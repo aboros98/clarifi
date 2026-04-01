@@ -2,14 +2,15 @@
 
 Flow: skill_loader → memory_retriever → react_agent → memory_saver → END
 
-- skill_loader: keyword match → select .md skills + tools (no LLM)
+- skill_loader: LLM selects .md skills + tools
 - memory_retriever: fetch relevant context from memU (if enabled)
-- react_agent: single Gemini call with tools + skill + memory context
+- react_agent: Gemini call with tools + skill + memory context
 - memory_saver: store conversation in memU for future recall (async)
 """
 
 import asyncio
 import logging
+import time
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AnyMessage
@@ -18,15 +19,22 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import create_react_agent
 
+from clarifi.agent.context import current_user_id
 from clarifi.agent.logging_middleware import wrap_tools_with_logging
 from clarifi.agent.prompts import SYSTEM_PROMPT
 from clarifi.config import settings
 from clarifi.llm import get_llm
-from clarifi.memory.memu_client import get_memu_service, memorize as memu_memorize, retrieve as memu_retrieve
-from clarifi.skills.loader import format_skill_context, get_tools_for_skills, select_skills_llm
+from clarifi.memory.memu_client import get_memu_service
+from clarifi.memory.memu_client import memorize as memu_memorize
+from clarifi.memory.memu_client import retrieve as memu_retrieve
+from clarifi.skills.loader import (
+    format_skill_context,
+    get_tools_for_skills,
+    select_skills_llm,
+)
 from clarifi.tools import ALL_TOOLS
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("clarifi.graph")
 
 
 class AgentState(TypedDict, total=False):
@@ -42,15 +50,17 @@ _TOOL_MAP = {t.name: t for t in ALL_TOOLS}
 
 
 async def skill_loader(state: AgentState) -> dict:
-    """Select skills. Background mode forces background_processing skill (no LLM routing)."""
+    """Select skills. Background mode forces background_processing skill."""
     mode = state.get("mode", "interactive")
+    t0 = time.monotonic()
 
     if mode == "background":
-        # Force background skill — no LLM routing, deterministic
         from clarifi.skills.loader import _load_all_skills
+
         all_skills = _load_all_skills()
         bg_skill = all_skills.get("background_processing")
         if bg_skill:
+            logger.debug("skill_loader: background mode (forced)")
             return {
                 "skill_context": format_skill_context([bg_skill]),
                 "bound_tool_names": get_tools_for_skills([bg_skill]),
@@ -61,37 +71,54 @@ async def skill_loader(state: AgentState) -> dict:
     user_msg = ""
     for msg in reversed(messages):
         if hasattr(msg, "type") and msg.type == "human":
-            user_msg = msg.content
+            user_msg = msg.content if isinstance(msg.content, str) else str(msg.content)
             break
 
-    selected = await select_skills_llm(user_msg)
-    context = format_skill_context(selected)
-    tool_names = get_tools_for_skills(selected)
+    try:
+        selected = await select_skills_llm(user_msg)
+    except Exception:
+        logger.exception("skill_loader: LLM selection failed, using all skills")
+        from clarifi.skills.loader import _load_all_skills
+
+        selected = list(_load_all_skills().values())
+
+    names = [s["name"] for s in selected]
+    elapsed = int((time.monotonic() - t0) * 1000)
+    logger.info("skill_loader: %s (%dms)", names, elapsed)
 
     return {
-        "skill_context": context,
-        "bound_tool_names": tool_names,
+        "skill_context": format_skill_context(selected),
+        "bound_tool_names": get_tools_for_skills(selected),
     }
 
 
 async def memory_retriever(state: AgentState) -> dict:
-    """Fetch relevant memories from memU to inject into agent context.
-    Uses direct Python import of memU (self-hosted via Supabase PostgreSQL)."""
+    """Fetch relevant memories from memU to inject into agent context."""
     if not get_memu_service():
         return {"memory_context": ""}
 
     user_msg = ""
     for msg in reversed(state.get("messages", [])):
         if hasattr(msg, "type") and msg.type == "human":
-            user_msg = msg.content
+            user_msg = msg.content if isinstance(msg.content, str) else str(msg.content)
             break
 
     if not user_msg:
         return {"memory_context": ""}
 
     user_id = state.get("user_id", "default")
-    memories = await memu_retrieve(user_msg, user_id=user_id, limit=5)
+    t0 = time.monotonic()
+
+    try:
+        memories = await memu_retrieve(user_msg, user_id=user_id, limit=5)
+    except Exception:
+        logger.exception("memory_retriever: failed for user=%s", user_id)
+        return {"memory_context": ""}
+
+    elapsed = int((time.monotonic() - t0) * 1000)
+
     if not memories:
+        logger.debug("memory_retriever: no memories (%dms)", elapsed)
         return {"memory_context": ""}
 
     lines = ["## Remembered Context (from memU)"]
@@ -100,26 +127,43 @@ async def memory_retriever(state: AgentState) -> dict:
         if content:
             lines.append(f"- {content[:200]}")
 
+    logger.info(
+        "memory_retriever: %d memories for user=%s (%dms)",
+        len(memories), user_id, elapsed,
+    )
     return {"memory_context": "\n".join(lines)}
 
 
 async def react_agent_node(state: AgentState) -> dict:
-    """Run the ReAct agent. Background mode excludes ask_user and adds strict instructions."""
+    """Run the ReAct agent with filtered tools and injected context."""
     skill_context = state.get("skill_context", "")
     memory_context = state.get("memory_context", "")
     mode = state.get("mode", "interactive")
+    bound_tool_names = set(state.get("bound_tool_names", []))
+    user_id = state.get("user_id", "anonymous")
+    t0 = time.monotonic()
 
-    # In background mode: exclude ask_user tool, the agent must not ask questions
-    if mode == "background":
+    # Filter tools to what the skill needs + always-available tools
+    always_available = {
+        "ask_user", "search_documents", "list_documents",
+        "get_document", "calculate",
+    }
+    wanted = bound_tool_names | always_available if bound_tool_names else set()
+
+    if mode == "background" and wanted:
+        tools = [t for t in ALL_TOOLS if t.name in wanted and t.name != "ask_user"]
+    elif mode == "background":
         tools = [t for t in ALL_TOOLS if t.name != "ask_user"]
+    elif wanted:
+        tools = [t for t in ALL_TOOLS if t.name in wanted]
     else:
         tools = list(ALL_TOOLS)
 
     logged_tools = wrap_tools_with_logging(tools)
 
     # Fetch company context for this user
-    user_id = state.get("user_id", "anonymous")
     from clarifi.api.onboarding import get_company_context
+
     company_context = await get_company_context(user_id)
 
     # Build system prompt: company + skills + memory + mode
@@ -147,13 +191,35 @@ async def react_agent_node(state: AgentState) -> dict:
         prompt=system_prompt,
     )
 
-    result = await agent.ainvoke({"messages": state["messages"]})
+    # Make user_id available to all tools via context variable
+    current_user_id.set(user_id)
+
+    try:
+        result = await agent.ainvoke({"messages": state["messages"]})
+    except Exception:
+        logger.exception(
+            "react_agent: failed (user=%s, mode=%s, tools=%d)",
+            user_id, mode, len(tools),
+        )
+        raise
+
+    elapsed = int((time.monotonic() - t0) * 1000)
+    n_msgs = len(result.get("messages", []))
+    tool_calls = [
+        tc["name"]
+        for m in result.get("messages", [])
+        for tc in getattr(m, "tool_calls", [])
+    ]
+    logger.info(
+        "react_agent: %d msgs, tools=%s (%dms, user=%s)",
+        n_msgs, tool_calls or "none", elapsed, user_id,
+    )
+
     return {"messages": result["messages"]}
 
 
 async def memory_saver(state: AgentState) -> dict:
-    """Store the conversation turn in memU for future recall (non-blocking).
-    Uses direct Python import of memU."""
+    """Store the conversation turn in memU for future recall (non-blocking)."""
     if not get_memu_service():
         return {}
 
@@ -163,18 +229,41 @@ async def memory_saver(state: AgentState) -> dict:
     for msg in reversed(state.get("messages", [])):
         if hasattr(msg, "type"):
             if msg.type == "ai" and msg.content and not agent_msg:
-                agent_msg = msg.content
+                content = msg.content
+                if isinstance(content, list):
+                    parts = []
+                    for p in content:
+                        if isinstance(p, dict) and p.get("text"):
+                            parts.append(p["text"])
+                        elif isinstance(p, str):
+                            parts.append(p)
+                    agent_msg = "\n".join(parts)
+                else:
+                    agent_msg = str(content)
             elif msg.type == "human" and not user_msg:
-                user_msg = msg.content
+                user_msg = (
+                    msg.content if isinstance(msg.content, str)
+                    else str(msg.content)
+                )
         if user_msg and agent_msg:
             break
 
     if user_msg and agent_msg:
         user_id = state.get("user_id", "default")
-        asyncio.create_task(memu_memorize(
+        task = asyncio.create_task(memu_memorize(
             f"User: {user_msg}\nAssistant: {agent_msg[:1000]}",
             {"source": "clarifi_chat", "user_id": user_id},
         ))
+
+        # Attach error callback so exceptions aren't silently lost
+        def _on_done(t: asyncio.Task):
+            if t.exception():
+                logger.error(
+                    "memory_saver: background save failed (user=%s): %s",
+                    user_id, t.exception(),
+                )
+
+        task.add_done_callback(_on_done)
 
     return {}
 
@@ -199,10 +288,7 @@ _checkpointer = None
 
 
 async def get_graph():
-    """Get or create the compiled graph with conversation checkpointer.
-
-    Uses Supabase PostgreSQL if configured, falls back to local SQLite.
-    """
+    """Get or create the compiled graph with conversation checkpointer."""
     global _compiled_graph, _checkpointer
     if _compiled_graph is None:
         db_url = settings.database_url
@@ -210,18 +296,25 @@ async def get_graph():
             try:
                 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-                pg_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
+                pg_url = db_url.replace(
+                    "postgresql+asyncpg://", "postgresql://",
+                )
                 _checkpointer = AsyncPostgresSaver.from_conn_string(pg_url)
                 await _checkpointer.setup()
                 logger.info("Checkpointer: Supabase PostgreSQL")
             except Exception:
-                logger.warning("PostgreSQL checkpointer failed, falling back to SQLite", exc_info=True)
+                logger.warning(
+                    "PostgreSQL checkpointer failed, falling back to SQLite",
+                    exc_info=True,
+                )
                 import aiosqlite
+
                 conn = await aiosqlite.connect("memu.db")
                 _checkpointer = AsyncSqliteSaver(conn=conn)
                 await _checkpointer.setup()
         else:
             import aiosqlite
+
             conn = await aiosqlite.connect("memu.db")
             _checkpointer = AsyncSqliteSaver(conn=conn)
             await _checkpointer.setup()
@@ -230,3 +323,14 @@ async def get_graph():
         graph = build_graph()
         _compiled_graph = graph.compile(checkpointer=_checkpointer)
     return _compiled_graph
+
+
+async def close_graph():
+    """Close checkpointer connections on shutdown."""
+    global _checkpointer
+    if _checkpointer is not None:
+        try:
+            if hasattr(_checkpointer, 'conn') and _checkpointer.conn:
+                await _checkpointer.conn.close()
+        except Exception:
+            pass

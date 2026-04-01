@@ -1,0 +1,32 @@
+
+FACTURA FISCALA
+Nr: CLR-2026-0038
+Data emiterii: 10.01.2026
+Data scadentei: 09.02.2026
+STATUS: RESTANTA - NEINCASATA
+
+FURNIZOR:
+  SC Digital Solutions Pro SRL
+  CUI: RO41892356
+  J40/5678/2021
+  Str. Victoriei nr. 45, Bucuresti
+  IBAN: RO62BRDE445SV12345678901 - BRD
+
+CLIENT:
+  SC MobileApps Innovation SRL
+  CUI: RO44123789
+  J40/9012/2022
+  Calea Mosilor nr. 128, Sector 3, Bucuresti
+
+SERVICII:
+  1. Dezvoltare aplicatie mobile iOS - Sprint 1  |  25.000,00 lei
+  2. Design UI/UX (15 ecrane)                     |   8.000,00 lei
+  3. Testare QA si bug fixing                     |   4.500,00 lei
+
+  Subtotal:      37.500,00 lei
+  TVA 19%:        7.125,00 lei
+  TOTAL:         44.625,00 lei
+
+NOTA: Factura este restanta de peste 50 de zile. S-au trimis 3 notificari
+de plata (15.02, 01.03, 15.03). Clientul a confirmat verbal ca va plati
+pana la sfarsitul lunii aprilie 2026.

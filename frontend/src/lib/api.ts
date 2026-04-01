@@ -73,6 +73,33 @@ export const api = {
 
   // Onboarding
   getOnboardingStatus: () => fetchAPI<any>("/api/onboarding/status"),
+  onboard: (data: {
+    companies: { company_name: string; trade_name?: string; tax_id?: string; registration_number?: string; address?: string; city?: string; country_code?: string; bank_accounts?: { iban: string; bank_name: string; currency: string }[] }[];
+    user_name: string;
+    user_role?: string;
+  }) =>
+    fetchAPI<any>("/api/onboarding", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  switchCompany: (companyId: string) =>
+    fetchAPI<any>(`/api/onboarding/switch-company/${companyId}`, {
+      method: "POST",
+    }),
+  updateProfile: (data: { user_name?: string; user_role?: string }) =>
+    fetchAPI<any>("/api/onboarding/profile", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  addCompany: (data: { company_name: string; tax_id?: string; city?: string; registration_number?: string }) =>
+    fetchAPI<any>("/api/onboarding/companies", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  removeCompany: (companyId: string) =>
+    fetchAPI<any>(`/api/onboarding/companies/${companyId}`, {
+      method: "DELETE",
+    }),
 
   // Integrations
   getDriveStatus: () => fetchAPI<any>("/api/integrations/drive/status"),

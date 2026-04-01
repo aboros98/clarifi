@@ -9,6 +9,7 @@ import httpx
 from langchain_core.tools import tool
 from sqlalchemy import select
 
+from clarifi.agent.context import current_user_id
 from clarifi.config import settings
 from clarifi.db.session import get_async_session
 from clarifi.models.document import Document, DocumentType, ProcessingStatus
@@ -69,6 +70,7 @@ async def upload_to_storage(file_path: str, folder_path: str = "/Neprocesat") ->
             return {"status": "duplicate", "document_id": existing.id}
 
         # Create document record
+        uid = current_user_id.get()
         doc = Document(
             original_filename=path.name,
             storage_path=storage_url or str(path),
@@ -77,6 +79,7 @@ async def upload_to_storage(file_path: str, folder_path: str = "/Neprocesat") ->
             file_hash_sha256=file_hash,
             document_type=DocumentType.OTHER,
             processing_status=ProcessingStatus.UPLOADED,
+            user_id=uid,
         )
         session.add(doc)
         await session.flush()
@@ -88,7 +91,7 @@ async def upload_to_storage(file_path: str, folder_path: str = "/Neprocesat") ->
         )).scalar_one_or_none()
 
         if not folder:
-            folder = VirtualFolder(name=folder_path.split("/")[-1] or "Root", path=folder_path, auto_created=True)
+            folder = VirtualFolder(name=folder_path.split("/")[-1] or "Root", path=folder_path, auto_created=True, user_id=uid)
             session.add(folder)
             await session.flush()
 
