@@ -157,19 +157,23 @@ export default function DocumentExplorer() {
   }
 
   async function uploadFiles(fileList: FileList | File[]) {
-    const files = Array.from(fileList);
-    if (files.length === 0) return;
+    const filesToUpload = Array.from(fileList);
+    if (filesToUpload.length === 0) return;
     setUploading(true);
     setUploadResults([]);
     setError(null);
 
     const results: string[] = [];
-    for (const file of files) {
+    for (const file of filesToUpload) {
       try {
-        await api.uploadDocument(file);
-        results.push(`${file.name} — procesat`);
+        const res = await api.uploadDocument(file);
+        if (res.status === "duplicate") {
+          results.push(`${file.name} — deja exista`);
+        } else {
+          results.push(`${file.name} — incarcat, se analizeaza...`);
+        }
       } catch {
-        results.push(`${file.name} — eroare`);
+        results.push(`${file.name} — eroare la incarcare`);
       }
       setUploadResults([...results]);
     }
@@ -177,6 +181,14 @@ export default function DocumentExplorer() {
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
     loadTree();
+
+    // Poll for updates while documents are processing
+    let polls = 0;
+    const pollInterval = setInterval(() => {
+      polls++;
+      loadTree();
+      if (polls >= 30) clearInterval(pollInterval); // stop after 5 min
+    }, 10000);
   }
 
   function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
