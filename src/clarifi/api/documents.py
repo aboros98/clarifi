@@ -1,4 +1,4 @@
-"""Document upload API — saves file immediately, processes in background."""
+"""Document upload API — saves file, processes in background."""
 
 import asyncio
 import hashlib
@@ -23,12 +23,7 @@ async def upload_document(
     request: Request,
     file: UploadFile = File(...),
 ):
-    """Upload a document. Returns immediately, processes in background.
-
-    The document appears in the UI as 'Se analizeaza...' until the
-    background agent finishes extraction and organization.
-    """
-    # Read file content
+    """Upload a document. Returns immediately, processes in background."""
     content = await file.read()
     if len(content) == 0:
         from fastapi import HTTPException
@@ -38,25 +33,15 @@ async def upload_document(
     filename = file.filename or "unknown"
     file_hash = hashlib.sha256(content).hexdigest()
 
-    # Save to permanent storage immediately
-    storage_dir = Path(settings.processed_dir)
-    storage_dir.mkdir(parents=True, exist_ok=True)
-    permanent_path = storage_dir / f"{file_hash}_{filename}"
-    permanent_path.write_bytes(content)
-
-    mime_type = (
-        mimetypes.guess_type(filename)[0] or "application/octet-stream"
-    )
-
-    user_id = _extract_user_id(request)
-
-    # Create document record immediately (status: uploaded)
+    # Check duplicate before saving
     async with get_async_session() as session:
-        # Check duplicate
         from sqlalchemy import select
 
         existing = (await session.execute(
-            select(Document).where(Document.file_hash_sha256 == file_hash)
+            select(Document).where(
+                Document.file_hash_sha256 == file_hash,
+                Document.is_deleted == False,  # noqa: E712
+            )
         )).scalar_one_or_none()
 
         if existing:
@@ -66,37 +51,31 @@ async def upload_document(
                 "filename": filename,
             }
 
-        doc = Document(
-            original_filename=filename,
-            storage_path=str(permanent_path),
-            mime_type=mime_type,
-            file_size_bytes=len(content),
-            file_hash_sha256=file_hash,
-            document_type=DocumentType.OTHER,
-            processing_status=ProcessingStatus.UPLOADED,
-            user_id=user_id,
-        )
-        session.add(doc)
-        await session.flush()
-        doc_id = doc.id
+    # Save file to disk
+    storage_dir = Path(settings.processed_dir)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    permanent_path = storage_dir / f"{file_hash}_{filename}"
+    permanent_path.write_bytes(content)
 
-    # Trigger background processing (non-blocking)
+    user_id = _extract_user_id(request)
+
+    # Trigger background processing — the agent's ingest_document tool
+    # will create the Document record with proper type and extract data
     asyncio.create_task(
-        _background_process(str(permanent_path), filename, doc_id, user_id)
+        _background_process(str(permanent_path), filename, user_id)
     )
 
     return {
         "status": "processing",
-        "document_id": doc_id,
         "filename": filename,
         "message": "Document incarcat. Se analizeaza in fundal.",
     }
 
 
 async def _background_process(
-    file_path: str, filename: str, doc_id: str, user_id: str,
+    file_path: str, filename: str, user_id: str,
 ):
-    """Run the agent in background mode to extract + organize the document."""
+    """Run the agent in background mode to extract + organize."""
     try:
         from langchain_core.messages import HumanMessage
 
@@ -108,37 +87,20 @@ async def _background_process(
                 {
                     "messages": [HumanMessage(content=(
                         f"Document nou: {filename} (la {file_path}). "
-                        f"Document ID: {doc_id}. "
-                        f"Proceseaza-l: extrage date, organizeaza in foldere, "
-                        f"creeaza remindere pentru deadline-uri."
+                        f"Proceseaza-l: parseaza, extrage date, salveaza, "
+                        f"organizeaza in foldere, creeaza remindere."
                     ))],
                     "user_id": user_id,
                     "mode": "background",
                 },
                 config={
                     "configurable": {
-                        "thread_id": f"{user_id}:upload-{doc_id}",
+                        "thread_id": f"{user_id}:upload-{filename}",
                     },
                 },
             ),
             timeout=300,
         )
         logger.info("Background processing done: %s", filename)
-        # Mark as stored
-        try:
-            async with get_async_session() as session:
-                doc = await session.get(Document, doc_id)
-                if doc and doc.processing_status != ProcessingStatus.FAILED:
-                    doc.processing_status = ProcessingStatus.STORED
-        except Exception:
-            pass
     except Exception:
         logger.exception("Background processing failed: %s", filename)
-        # Mark document as failed
-        try:
-            async with get_async_session() as session:
-                doc = await session.get(Document, doc_id)
-                if doc:
-                    doc.processing_status = ProcessingStatus.FAILED
-        except Exception:
-            pass
