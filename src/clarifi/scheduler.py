@@ -71,7 +71,7 @@ async def _send_notification(message: str, channels: list | None):
             logger.warning("Telegram notification failed", exc_info=True)
 
 
-async def _execute_task(task: ScheduledTask) -> tuple[str, str | None]:
+async def _execute_task(task: ScheduledTask) -> tuple[str, str | None, str | None]:
     """Execute a single scheduled task via the agent graph."""
     from clarifi.agent.graph import get_graph
     from clarifi.api.chat import extract_ai_response

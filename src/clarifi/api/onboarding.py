@@ -374,25 +374,25 @@ async def get_company_context(user_id: str) -> str:
         if not company:
             return ""
 
-    legal_name = _sanitize(company.legal_name)
-    tax_id = _sanitize(company.tax_id) if company.tax_id else ""
-    display_name = _sanitize(profile.display_name)
-    role = _sanitize(profile.role)
+        # Extract all values INSIDE session (ORM objects detach on exit)
+        legal_name = _sanitize(company.legal_name)
+        tax_id = _sanitize(company.tax_id) if company.tax_id else ""
+        display_name = _sanitize(profile.display_name)
+        role = _sanitize(profile.role)
+        city = company.city
+        country = company.country_code or "RO"
+        bank_accounts = company.bank_accounts
 
     parts = [f"## Company Context\nYou are serving **{legal_name}**"]
     if tax_id:
         parts.append(f"(CUI: {tax_id})")
-    parts.append(
-        f"\nUser: **{display_name}** (role: {role})",
-    )
-    if company.city:
-        parts.append(
-            f"\nLocation: {company.city}, {company.country_code or 'RO'}",
-        )
-    if company.bank_accounts and isinstance(company.bank_accounts, list):
+    parts.append(f"\nUser: **{display_name}** (role: {role})")
+    if city:
+        parts.append(f"\nLocation: {city}, {country}")
+    if bank_accounts and isinstance(bank_accounts, list):
         ibans = [
             ba.get("iban", "")
-            for ba in company.bank_accounts
+            for ba in bank_accounts
             if ba.get("iban")
         ]
         if ibans:
