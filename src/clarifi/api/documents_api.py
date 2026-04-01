@@ -76,11 +76,13 @@ async def get_document(doc_id: str):
 
 @router.delete("/documents/{doc_id}")
 async def delete_document(doc_id: str):
-    """Soft-delete a document (allows re-upload)."""
+    """Delete a document — clears hash so same file can be re-uploaded."""
     async with get_async_session() as session:
         d = await session.get(Document, doc_id)
         if not d:
             raise HTTPException(status_code=404, detail="Document not found")
         d.is_deleted = True
         d.deleted_at = datetime.now(UTC)
+        # Clear hash so same file can be re-uploaded
+        d.file_hash_sha256 = f"deleted_{doc_id}_{d.file_hash_sha256}"
     return {"status": "deleted", "id": doc_id}
