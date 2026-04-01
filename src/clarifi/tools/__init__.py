@@ -28,6 +28,7 @@ from clarifi.tools.finance import query_cashflow, query_profitability, query_rec
 from clarifi.tools.matching import confirm_match, run_payment_matching
 from clarifi.tools.scheduling import cancel_reminder, create_reminder, list_reminders
 from clarifi.tools.traces import read_trace, write_trace
+from clarifi.tools.web_search import web_search
 
 ALL_TOOLS = [
     # Finance
@@ -84,4 +85,6 @@ ALL_TOOLS = [
     # Discovery & Search
     discover_data,
     search_data,
+    # Web Search
+    web_search,
 ]

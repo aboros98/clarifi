@@ -147,6 +147,7 @@ async def react_agent_node(state: AgentState) -> dict:
     always_available = {
         "ask_user", "search_documents", "list_documents",
         "get_document", "calculate", "discover_data", "search_data",
+        "web_search",
     }
     wanted = bound_tool_names | always_available if bound_tool_names else set()
 

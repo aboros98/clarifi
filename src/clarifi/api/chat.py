@@ -33,6 +33,8 @@ TOOL_LABELS = {
     "create_reminder": "Creez reminder",
     "create_folder": "Creez folder",
     "move_file": "Organizez fisier",
+    "web_search": "Caut pe internet",
+    "write_trace": "Scriu analiza",
 }
 
 
