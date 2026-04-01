@@ -8,6 +8,8 @@ from clarifi.tools.analysis import (
 )
 from clarifi.tools.calculator import calculate
 from clarifi.tools.clarification import ask_user
+from clarifi.tools.data_search import search_data
+from clarifi.tools.discovery import discover_data
 from clarifi.tools.cloud_sync import sync_google_drive, upload_to_storage
 from clarifi.tools.contracts import query_contracts, query_milestones
 from clarifi.tools.correlation import check_contract_status, reconcile_project
@@ -79,4 +81,7 @@ ALL_TOOLS = [
     cancel_reminder,
     # Calculator
     calculate,
+    # Discovery & Search
+    discover_data,
+    search_data,
 ]

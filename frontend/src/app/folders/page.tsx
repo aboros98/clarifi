@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   FolderOpen,
   Folder,
@@ -10,6 +10,7 @@ import {
   Upload,
   Eye,
   X,
+  Loader2,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -68,6 +69,12 @@ export default function DocumentExplorer() {
   // Document viewer
   const [viewingDoc, setViewingDoc] = useState<any>(null);
   const [docLoading, setDocLoading] = useState(false);
+
+  // Upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResults, setUploadResults] = useState<string[]>([]);
+  const [dragging, setDragging] = useState(false);
 
   // Load folder tree on mount
   useEffect(() => {
@@ -148,11 +155,62 @@ export default function DocumentExplorer() {
     }
   }
 
+  async function uploadFiles(fileList: FileList | File[]) {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    setUploading(true);
+    setUploadResults([]);
+    setError(null);
+
+    const results: string[] = [];
+    for (const file of files) {
+      try {
+        await api.uploadDocument(file);
+        results.push(`${file.name} — procesat`);
+      } catch {
+        results.push(`${file.name} — eroare`);
+      }
+      setUploadResults([...results]);
+    }
+
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    loadTree();
+  }
+
+  function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files) uploadFiles(e.target.files);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    if (e.dataTransfer.files.length > 0) {
+      uploadFiles(e.dataTransfer.files);
+    }
+  }
+
   // Root folders (no parent)
   const rootFolders = treeFolders.filter((f) => !f.parent_id);
 
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-4">
+    <div
+      className="p-4 sm:p-6 max-w-5xl mx-auto space-y-4"
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {dragging && (
+        <div className="fixed inset-0 z-40 bg-indigo-600/10 border-4 border-dashed border-indigo-400 flex items-center justify-center pointer-events-none">
+          <div className="bg-white rounded-2xl shadow-xl px-8 py-6 text-center">
+            <Upload size={32} className="text-indigo-600 mx-auto mb-2" />
+            <p className="text-lg font-semibold text-gray-900">Trage fisierele aici</p>
+            <p className="text-sm text-gray-500">PDF, DOCX, TXT, CSV, XLSX, imagini</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -163,7 +221,49 @@ export default function DocumentExplorer() {
             Documentele tale organizate de agent
           </p>
         </div>
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            multiple
+            accept=".pdf,.docx,.doc,.txt,.csv,.xlsx,.xls,.png,.jpg,.jpeg"
+            onChange={handleUpload}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          >
+            {uploading ? (
+              <><Loader2 size={16} className="animate-spin" /> Se proceseaza...</>
+            ) : (
+              <><Upload size={16} /> Incarca documente</>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Upload results */}
+      {uploadResults.length > 0 && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded-xl text-sm">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-green-700 font-medium">
+              {uploading ? "Se proceseaza..." : "Finalizat"}
+            </span>
+            {!uploading && (
+              <button onClick={() => setUploadResults([])} className="text-green-400 hover:text-green-600">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          {uploadResults.map((r, i) => (
+            <p key={i} className={`text-xs ${r.includes("eroare") ? "text-red-500" : "text-green-600"}`}>
+              {r}
+            </p>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">

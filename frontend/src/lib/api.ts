@@ -64,6 +64,24 @@ export const api = {
   // Documents
   getDocuments: (limit = 50) => fetchAPI<any>(`/api/documents?limit=${limit}`),
   getDocument: (id: string) => fetchAPI<any>(`/api/documents/${id}`),
+  uploadDocument: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const headers: Record<string, string> = {};
+    const token = await getAccessToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001"}/documents/upload`,
+      { method: "POST", headers, body: formData }
+    );
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText);
+      throw new Error(text || `${res.status}`);
+    }
+    return res.json();
+  },
 
   // Sessions
   getSessions: () => fetchAPI<any>("/api/sessions"),

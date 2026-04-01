@@ -146,7 +146,7 @@ async def react_agent_node(state: AgentState) -> dict:
     # Filter tools to what the skill needs + always-available tools
     always_available = {
         "ask_user", "search_documents", "list_documents",
-        "get_document", "calculate",
+        "get_document", "calculate", "discover_data", "search_data",
     }
     wanted = bound_tool_names | always_available if bound_tool_names else set()
 
