@@ -112,7 +112,12 @@ async def save_extracted_data(entity_type: str, data: dict, document_id: str = "
 
     async with get_async_session() as session:
         own = (await session.execute(
-            select(Company).where(Company.role == CompanyRole.OWN_COMPANY, Company.is_deleted == False)
+            select(Company)
+            .where(
+                Company.role == CompanyRole.OWN_COMPANY,
+                Company.is_deleted == False,  # noqa: E712
+            )
+            .limit(1)
         )).scalar_one_or_none()
         if not own:
             return {"error": "Nicio companie configurata. Finalizeaza onboarding-ul mai intai."}
