@@ -10,13 +10,9 @@ from sqlalchemy import select
 
 from clarifi.agent.context import current_user_id
 from clarifi.db.session import get_async_session
-from clarifi.models.company import Company, CompanyRole
 from clarifi.models.user_profile import UserCompanyLink, UserProfile
 
 logger = logging.getLogger(__name__)
-
-_cache: dict[str, list[str]] = {}
-
 
 async def get_user_company_ids() -> list[str]:
     """Get ALL company_ids the current user has access to.
@@ -25,9 +21,6 @@ async def get_user_company_ids() -> list[str]:
     with `WHERE company_id IN (...)`.
     """
     uid = current_user_id.get()
-
-    if uid in _cache:
-        return _cache[uid]
 
     async with get_async_session() as session:
         # Get all companies linked to this user
@@ -38,7 +31,6 @@ async def get_user_company_ids() -> list[str]:
         )).scalars().all()
 
         if links:
-            _cache[uid] = list(links)
             return list(links)
 
         # Fallback: user profile's active company
@@ -49,16 +41,7 @@ async def get_user_company_ids() -> list[str]:
         )).scalar_one_or_none()
 
         if profile:
-            _cache[uid] = [profile]
             return [profile]
 
-        # Last fallback: any OWN_COMPANY (for anonymous/dev mode)
-        own = (await session.execute(
-            select(Company.id)
-            .where(Company.role == CompanyRole.OWN_COMPANY)
-            .limit(1)
-        )).scalar_one_or_none()
-
-        result = [own] if own else []
-        _cache[uid] = result
-        return result
+        # No profile found — no access to any data
+        return []

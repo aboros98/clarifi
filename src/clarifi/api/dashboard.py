@@ -1,9 +1,11 @@
 import asyncio
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
+from clarifi.agent.context import current_user_id
+from clarifi.api.chat import _extract_user_id
 from clarifi.db.session import get_async_session
 from clarifi.models.decision_log import SchedulerRun
 from clarifi.models.scheduled_task import ScheduledTask
@@ -16,8 +18,11 @@ router = APIRouter(tags=["dashboard"])
 
 
 @router.get("/dashboard/kpis")
-async def get_kpis():
+async def get_kpis(request: Request):
     """Get a real-time KPI snapshot for the dashboard."""
+    # Set user context so tools filter by company
+    user_id = _extract_user_id(request)
+    current_user_id.set(user_id)
     try:
         cashflow, receivables, alerts = await asyncio.gather(
             query_cashflow.ainvoke({}),
@@ -69,8 +74,9 @@ async def get_kpis():
 
 
 @router.get("/alerts")
-async def get_alerts():
+async def get_alerts(request: Request):
     """Get active alerts."""
+    current_user_id.set(_extract_user_id(request))
     try:
         return await query_alerts.ainvoke({})
     except Exception:
