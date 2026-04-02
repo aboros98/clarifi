@@ -137,11 +137,21 @@ async def mark_invoice_paid(invoice_id: str, amount_paid: float | None = None) -
         invoice_id — the invoice ID
         amount_paid — amount paid (defaults to full remaining amount)
     Use when: user says "am incasat factura X" or "invoice X was paid"."""
+    from clarifi.agent.company_scope import get_user_company_ids
+
     now = datetime.now(timezone.utc)
+    company_ids = await get_user_company_ids()
 
     async with get_async_session() as session:
         inv = await session.get(Invoice, invoice_id)
         if not inv:
+            return {"error": f"Invoice {invoice_id} not found"}
+
+        # Verify ownership
+        if company_ids and (
+            inv.issuer_company_id not in company_ids
+            and inv.recipient_company_id not in company_ids
+        ):
             return {"error": f"Invoice {invoice_id} not found"}
 
         payment = Decimal(str(amount_paid)) if amount_paid else inv.amount_remaining

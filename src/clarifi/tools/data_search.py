@@ -237,7 +237,24 @@ async def _search_contracts(session, name, status, min_amt, max_amt,
 
 
 async def _search_companies(session, name, limit):
+    from clarifi.agent.company_scope import get_user_company_ids
+
+    company_ids = await get_user_company_ids()
+
+    # Only show companies the user interacts with (own + counterparties)
     q = select(Company).where(Company.is_deleted == False)  # noqa: E712
+    if company_ids:
+        # Get all company IDs from user's invoices
+        related = select(Invoice.issuer_company_id).where(
+            Invoice.issuer_company_id.in_(company_ids)
+            | Invoice.recipient_company_id.in_(company_ids),
+        ).union(
+            select(Invoice.recipient_company_id).where(
+                Invoice.issuer_company_id.in_(company_ids)
+                | Invoice.recipient_company_id.in_(company_ids),
+            )
+        )
+        q = q.where(Company.id.in_(related) | Company.id.in_(company_ids))
 
     if name:
         q = q.where(

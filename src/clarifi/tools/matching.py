@@ -137,7 +137,10 @@ async def run_payment_matching() -> dict:
 async def confirm_match(transaction_id: str, invoice_id: str) -> dict:
     """Confirm a payment-invoice match. Updates both the transaction and invoice records.
     Args: transaction_id, invoice_id — IDs from run_payment_matching suggestions."""
+    from clarifi.agent.company_scope import get_user_company_ids
+
     now = datetime.now(timezone.utc)
+    company_ids = await get_user_company_ids()
 
     async with get_async_session() as session:
         txn = await session.get(BankTransaction, transaction_id)
@@ -147,6 +150,13 @@ async def confirm_match(transaction_id: str, invoice_id: str) -> dict:
             return {"error": f"Transaction {transaction_id} not found"}
         if not inv:
             return {"error": f"Invoice {invoice_id} not found"}
+
+        # Verify ownership
+        if company_ids and (
+            inv.issuer_company_id not in company_ids
+            and inv.recipient_company_id not in company_ids
+        ):
+            return {"error": "Not authorized"}
 
         matched_amount = min(txn.amount, inv.amount_remaining)
 

@@ -18,15 +18,19 @@ async def check_contract_status(contract_number: str) -> dict:
     """Check if a contract is fully invoiced and fully collected.
     Shows: contract value, total invoiced, total collected, gaps, delays.
     Args: contract_number — e.g. 'CTR-2025-001'."""
+    from clarifi.agent.company_scope import get_user_company_ids
+
     today = date.today()
+    company_ids = await get_user_company_ids()
 
     async with get_async_session() as session:
-        contract = (await session.execute(
-            select(Contract).where(
-                Contract.contract_number == contract_number,
-                Contract.is_deleted == False,
-            )
-        )).scalar_one_or_none()
+        q = select(Contract).where(
+            Contract.contract_number == contract_number,
+            Contract.is_deleted == False,  # noqa: E712
+        )
+        if company_ids:
+            q = q.where(Contract.counterparty_id.in_(company_ids))
+        contract = (await session.execute(q)).scalar_one_or_none()
 
         if not contract:
             return {"error": f"Contract '{contract_number}' not found"}
@@ -113,20 +117,36 @@ async def reconcile_project(project_code: str) -> dict:
     """Full reconciliation for a project: budget vs contract vs invoiced vs collected vs costs.
     Args: project_code — e.g. 'PRJ-001'."""
 
+    from clarifi.agent.company_scope import get_user_company_ids
+    from sqlalchemy import or_
+
+    company_ids = await get_user_company_ids()
+
     async with get_async_session() as session:
         project = (await session.execute(
-            select(Project).where(Project.project_code == project_code, Project.is_deleted == False)
+            select(Project).where(
+                Project.project_code == project_code,
+                Project.is_deleted == False,  # noqa: E712
+            )
         )).scalar_one_or_none()
 
         if not project:
             return {"error": f"Project '{project_code}' not found"}
 
-        # Revenue invoiced
+        # Revenue invoiced (scoped to user's companies)
+        inv_scope = []
+        if company_ids:
+            inv_scope = [or_(
+                Invoice.issuer_company_id.in_(company_ids),
+                Invoice.recipient_company_id.in_(company_ids),
+            )]
+
         rev_q = select(func.coalesce(func.sum(Invoice.total_amount), 0)).where(
             Invoice.project_id == project.id,
             Invoice.direction == InvoiceDirection.ISSUED,
             Invoice.status != InvoiceStatus.CANCELLED,
-            Invoice.is_deleted == False,
+            Invoice.is_deleted == False,  # noqa: E712
+            *inv_scope,
         )
         revenue = Decimal(str((await session.execute(rev_q)).scalar_one()))
 
