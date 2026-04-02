@@ -1,6 +1,12 @@
 "use client";
 
-import { Wallet, TrendingUp, AlertTriangle, Receipt } from "lucide-react";
+import {
+  Wallet,
+  ArrowDownLeft,
+  ArrowUpRight,
+  TrendingUp,
+  AlertTriangle,
+} from "lucide-react";
 
 interface KPICardsProps {
   cashflow: any;
@@ -8,108 +14,145 @@ interface KPICardsProps {
   alerts: any;
 }
 
-function fmt(n: number): string {
+function fmt(n: number | null | undefined): string {
+  if (n == null) return "--";
   return new Intl.NumberFormat("ro-RO", { maximumFractionDigits: 0 }).format(n);
 }
 
-export default function KPICards({ cashflow, receivables, alerts }: KPICardsProps) {
+export default function KPICards({
+  cashflow,
+  receivables,
+  alerts,
+}: KPICardsProps) {
   const actual = cashflow?.actual;
   const expected = cashflow?.expected;
 
-  const cards = [
-    {
-      title: "Bani in cont",
-      value: actual ? `${fmt(actual.cash_in_bank)} lei` : "--",
-      subtitle: actual?.runway_days
-        ? `Ajung pentru ~${actual.runway_days} zile`
-        : null,
-      badge:
-        actual?.bank_data_age_days && actual.bank_data_age_days > 3
-          ? `Date vechi de ${actual.bank_data_age_days} zile`
-          : null,
-      icon: Wallet,
-      bg: "bg-emerald-50 border-emerald-200",
-      text: "text-emerald-800",
-      iconColor: "text-emerald-600",
-    },
-    {
-      title: "De incasat",
-      value: receivables ? `${fmt(receivables.total_receivable)} lei` : "--",
-      subtitle: receivables
-        ? `${receivables.count} facturi${receivables.count_overdue > 0 ? ` (${receivables.count_overdue} restante)` : ""}`
-        : null,
-      badge:
-        receivables?.count_overdue > 0
-          ? `${receivables.count_overdue} facturi restante!`
-          : null,
-      icon: Receipt,
-      bg: "bg-blue-50 border-blue-200",
-      text: "text-blue-800",
-      iconColor: "text-blue-600",
-    },
-    {
-      title: "Estimare 30 zile",
-      value: expected ? `${fmt(expected.net_30d)} lei` : "--",
-      subtitle: actual
-        ? `Cheltuieli lunare: ~${fmt(actual.monthly_burn_rate)} lei`
-        : null,
-      badge: null,
-      icon: TrendingUp,
-      bg:
-        expected?.net_30d < 0
-          ? "bg-red-50 border-red-200"
-          : "bg-indigo-50 border-indigo-200",
-      text: expected?.net_30d < 0 ? "text-red-800" : "text-indigo-800",
-      iconColor: expected?.net_30d < 0 ? "text-red-600" : "text-indigo-600",
-    },
-    {
-      title: "Alerte",
-      value: alerts ? String(alerts.count) : "--",
-      subtitle: alerts
-        ? alerts.critical > 0
-          ? `${alerts.critical} urgente`
-          : "Totul e in ordine"
-        : null,
-      badge: alerts?.critical > 0 ? "Necesita atentie!" : null,
-      icon: AlertTriangle,
-      bg:
-        alerts?.critical > 0
-          ? "bg-red-50 border-red-200"
-          : "bg-amber-50 border-amber-200",
-      text: alerts?.critical > 0 ? "text-red-800" : "text-amber-800",
-      iconColor: alerts?.critical > 0 ? "text-red-600" : "text-amber-600",
-    },
-  ];
-
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-      {cards.map((card) => (
-        <div key={card.title} className={`rounded-xl border p-4 sm:p-5 ${card.bg}`}>
-          <div className="flex items-center justify-between mb-2">
-            <span
-              className={`text-xs font-medium uppercase tracking-wide ${card.text} opacity-70`}
-            >
-              {card.title}
+    <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
+      {/* Cash in cont */}
+      <div className="rounded-xl border bg-white p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <Wallet size={18} className="text-emerald-600" />
+          </div>
+          {actual?.bank_data_age_days > 3 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+              {actual.bank_data_age_days}z vechi
             </span>
-            <card.icon size={18} className={card.iconColor} />
-          </div>
-          <div className={`text-xl sm:text-2xl font-bold ${card.text}`}>
-            {card.value}
-          </div>
-          {card.subtitle && (
-            <div className={`text-xs mt-1 ${card.text} opacity-60`}>
-              {card.subtitle}
-            </div>
-          )}
-          {card.badge && (
-            <div className="mt-2">
-              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-                {card.badge}
-              </span>
-            </div>
           )}
         </div>
-      ))}
+        <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+          {fmt(actual?.cash_in_bank)}
+          <span className="text-sm font-normal text-gray-400 ml-1">lei</span>
+        </p>
+        <p className="text-xs text-gray-500 mt-1">Bani in cont</p>
+        {actual?.runway_days != null && (
+          <p className="text-xs text-gray-400 mt-0.5">
+            ~{actual.runway_days} zile
+          </p>
+        )}
+      </div>
+
+      {/* De incasat */}
+      <div className="rounded-xl border bg-white p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+            <ArrowDownLeft size={18} className="text-blue-600" />
+          </div>
+          {receivables?.count_overdue > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+              {receivables.count_overdue} restante
+            </span>
+          )}
+        </div>
+        <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+          {fmt(receivables?.total_receivable)}
+          <span className="text-sm font-normal text-gray-400 ml-1">lei</span>
+        </p>
+        <p className="text-xs text-gray-500 mt-1">De incasat</p>
+        {receivables?.count > 0 && (
+          <p className="text-xs text-gray-400 mt-0.5">
+            {receivables.count} facturi
+          </p>
+        )}
+      </div>
+
+      {/* De platit */}
+      <div className="rounded-xl border bg-white p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="w-9 h-9 rounded-lg bg-orange-100 flex items-center justify-center">
+            <ArrowUpRight size={18} className="text-orange-600" />
+          </div>
+        </div>
+        <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+          {fmt(expected?.outflows_30d)}
+          <span className="text-sm font-normal text-gray-400 ml-1">lei</span>
+        </p>
+        <p className="text-xs text-gray-500 mt-1">De platit (30 zile)</p>
+        {actual?.monthly_burn_rate > 0 && (
+          <p className="text-xs text-gray-400 mt-0.5">
+            ~{fmt(actual.monthly_burn_rate)} lei/luna
+          </p>
+        )}
+      </div>
+
+      {/* Estimare 30 zile */}
+      <div
+        className={`rounded-xl border p-4 sm:p-5 ${
+          expected?.net_30d < 0 ? "bg-red-50 border-red-200" : "bg-white"
+        }`}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div
+            className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+              expected?.net_30d < 0 ? "bg-red-100" : "bg-indigo-100"
+            }`}
+          >
+            <TrendingUp
+              size={18}
+              className={expected?.net_30d < 0 ? "text-red-600" : "text-indigo-600"}
+            />
+          </div>
+        </div>
+        <p
+          className={`text-2xl sm:text-3xl font-bold ${
+            expected?.net_30d < 0 ? "text-red-700" : "text-gray-900"
+          }`}
+        >
+          {expected?.net_30d < 0 ? "-" : "+"}
+          {fmt(Math.abs(expected?.net_30d || 0))}
+          <span className="text-sm font-normal text-gray-400 ml-1">lei</span>
+        </p>
+        <p className="text-xs text-gray-500 mt-1">Estimare 30 zile</p>
+      </div>
+
+      {/* Alerte */}
+      <div
+        className={`rounded-xl border p-4 sm:p-5 ${
+          alerts?.critical > 0 ? "bg-red-50 border-red-200" : "bg-white"
+        }`}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div
+            className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+              alerts?.critical > 0 ? "bg-red-100" : "bg-gray-100"
+            }`}
+          >
+            <AlertTriangle
+              size={18}
+              className={alerts?.critical > 0 ? "text-red-600" : "text-gray-400"}
+            />
+          </div>
+        </div>
+        <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+          {alerts?.count ?? "--"}
+        </p>
+        <p className="text-xs text-gray-500 mt-1">
+          {alerts?.critical > 0
+            ? `${alerts.critical} urgente`
+            : "Alerte"}
+        </p>
+      </div>
     </div>
   );
 }
