@@ -99,14 +99,43 @@ async def query_cashflow() -> dict:
 
         # COMMITTED: milestones due within 30 days
         ms_q = select(func.coalesce(func.sum(ContractMilestone.amount), 0)).where(
-            ContractMilestone.completed == False,
+            ContractMilestone.completed == False,  # noqa: E712
             ContractMilestone.amount.isnot(None),
             ContractMilestone.due_date >= today,
             ContractMilestone.due_date <= today + timedelta(days=30),
         )
         upcoming_ms_amount = Decimal(str((await session.execute(ms_q)).scalar_one()))
 
-    runway = int(cash / (burn_rate / 30)) if burn_rate > 0 else None
+        # RECURRING: monthly fixed costs from contracts (CIM, leasing, rent, etc.)
+
+        recurring_q = (
+            select(
+                Contract.contract_type,
+                func.coalesce(func.sum(Contract.recurring_amount), 0),
+                func.count(Contract.id),
+            )
+            .where(
+                Contract.is_recurring == True,  # noqa: E712
+                Contract.status == ContractStatus.ACTIVE,
+                Contract.is_deleted == False,  # noqa: E712
+                Contract.recurring_amount.isnot(None),
+            )
+            .group_by(Contract.contract_type)
+        )
+        recurring_rows = (await session.execute(recurring_q)).all()
+        recurring_total = Decimal("0")
+        recurring_breakdown = {}
+        for ct_type, total_amount, count in recurring_rows:
+            ct_name = ct_type.value if hasattr(ct_type, "value") else str(ct_type)
+            recurring_breakdown[ct_name] = {
+                "monthly": float(total_amount),
+                "count": count,
+            }
+            recurring_total += Decimal(str(total_amount))
+
+    # Include recurring costs in burn rate for runway
+    effective_burn = burn_rate + recurring_total
+    runway = int(cash / (effective_burn / 30)) if effective_burn > 0 else None
 
     return {
         "actual": {
@@ -118,15 +147,19 @@ async def query_cashflow() -> dict:
         },
         "expected": {
             "inflows_30d": float(inflows_30),
-            "outflows_30d": float(outflows_30),
-            "net_30d": float(cash + inflows_30 - outflows_30),
+            "outflows_30d": float(outflows_30 + recurring_total),
+            "net_30d": float(cash + inflows_30 - outflows_30 - recurring_total),
             "inflows_90d": float(inflows_90),
-            "outflows_90d": float(outflows_90),
-            "net_90d": float(cash + inflows_90 - outflows_90),
+            "outflows_90d": float(outflows_90 + recurring_total * 3),
+            "net_90d": float(cash + inflows_90 - outflows_90 - recurring_total * 3),
         },
         "committed": {
             "contract_value_not_invoiced": float(not_yet_invoiced),
             "upcoming_milestones_30d": float(upcoming_ms_amount),
+        },
+        "recurring": {
+            "monthly_total": float(recurring_total),
+            "breakdown": recurring_breakdown,
         },
         "risk": {
             "overdue_receivables": float(overdue),

@@ -35,6 +35,7 @@ TOOL_LABELS = {
     "move_file": "Organizez fisier",
     "web_search": "Caut pe internet",
     "write_trace": "Scriu analiza",
+    "emit_invoice": "Emit factura",
 }
 
 

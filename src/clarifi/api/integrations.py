@@ -132,28 +132,115 @@ async def telegram_webhook(request: Request):
     text = message.get("text", "")
     chat_id = message.get("chat", {}).get("id")
 
-    if not text or not chat_id:
+    if not chat_id:
         return {"ok": True}
 
-    # Process via agent
-    from clarifi.agent.graph import get_graph
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
     from langchain_core.messages import HumanMessage
+
+    from clarifi.agent.graph import get_graph
     from clarifi.api.chat import extract_ai_response
 
+    now = datetime.now(ZoneInfo("Europe/Bucharest"))
+    timestamp = now.strftime("%d.%m.%Y, %H:%M")
+
+    # Handle document/photo uploads
+    doc = message.get("document")
+    photo = message.get("photo")
+
+    if doc or photo:
+        # Download file from Telegram
+        file_id = doc["file_id"] if doc else photo[-1]["file_id"]
+        file_name = doc.get("file_name", "telegram_upload.pdf") if doc else "telegram_photo.jpg"
+
+        try:
+            async with httpx.AsyncClient() as client:
+                # Get file path from Telegram
+                file_info = await client.get(
+                    f"https://api.telegram.org/bot{settings.telegram_bot_token}/getFile",
+                    params={"file_id": file_id},
+                )
+                file_path = file_info.json().get("result", {}).get("file_path")
+
+                if file_path:
+                    # Download file
+                    file_resp = await client.get(
+                        f"https://api.telegram.org/file/bot{settings.telegram_bot_token}/{file_path}",
+                    )
+
+                    # Save and process
+                    import hashlib
+                    from pathlib import Path
+
+                    from clarifi.config import settings as app_settings
+
+                    content = file_resp.content
+                    file_hash = hashlib.sha256(content).hexdigest()
+                    storage_dir = Path(app_settings.processed_dir)
+                    storage_dir.mkdir(parents=True, exist_ok=True)
+                    permanent_path = storage_dir / f"{file_hash}_{file_name}"
+                    permanent_path.write_bytes(content)
+
+                    # Process via background agent
+                    import asyncio
+
+                    from clarifi.api.documents import _background_process
+
+                    asyncio.create_task(
+                        _background_process(
+                            str(permanent_path), file_name, "", f"telegram-{chat_id}",
+                        )
+                    )
+
+                    text = f"[{timestamp}] Am primit documentul {file_name}. Il procesez."
+                    caption = message.get("caption", "")
+                    if caption:
+                        text += f" Mentiune: {caption}"
+                else:
+                    text = f"[{timestamp}] Nu am putut descarca fisierul."
+        except Exception:
+            logger.exception("Telegram file download failed")
+            text = f"[{timestamp}] Eroare la descarcare fisier."
+
+        # Send acknowledgment
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                json={"chat_id": chat_id, "text": text},
+            )
+        return {"ok": True}
+
+    if not text:
+        return {"ok": True}
+
+    # Process text message via agent
+    text = f"[{timestamp}] {text}"
     graph = await get_graph()
-    result = await graph.ainvoke(
-        {"messages": [HumanMessage(content=text)]},
-        config={"configurable": {"thread_id": f"telegram-{chat_id}"}},
-    )
-    response = extract_ai_response(result)
-
-    # Send reply via Telegram API
-
-    async with httpx.AsyncClient() as client:
-        await client.post(
-            f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
-            json={"chat_id": chat_id, "text": response, "parse_mode": "Markdown"},
+    try:
+        result = await graph.ainvoke(
+            {"messages": [HumanMessage(content=text)]},
+            config={"configurable": {"thread_id": f"telegram-{chat_id}"}},
         )
+        response = extract_ai_response(result) or "Nu am putut genera un raspuns."
+    except Exception:
+        logger.exception("Telegram agent error")
+        response = "A aparut o eroare. Incearca din nou."
+
+    # Send reply
+    async with httpx.AsyncClient() as client:
+        # Telegram markdown can fail — fallback to plain text
+        try:
+            await client.post(
+                f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                json={"chat_id": chat_id, "text": response, "parse_mode": "Markdown"},
+            )
+        except Exception:
+            await client.post(
+                f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
+                json={"chat_id": chat_id, "text": response},
+            )
 
     return {"ok": True}
 

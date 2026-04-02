@@ -25,6 +25,7 @@ from clarifi.tools.file_manager import (
     read_document_content,
 )
 from clarifi.tools.finance import query_cashflow, query_profitability, query_receivables
+from clarifi.tools.invoicing import emit_invoice
 from clarifi.tools.matching import confirm_match, run_payment_matching
 from clarifi.tools.scheduling import cancel_reminder, create_reminder, list_reminders
 from clarifi.tools.traces import read_trace, write_trace
@@ -82,6 +83,8 @@ ALL_TOOLS = [
     cancel_reminder,
     # Calculator
     calculate,
+    # Invoicing
+    emit_invoice,
     # Discovery & Search
     discover_data,
     search_data,
