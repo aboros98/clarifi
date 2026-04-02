@@ -15,6 +15,7 @@ from clarifi.tools.contracts import query_contracts, query_milestones
 from clarifi.tools.correlation import check_contract_status, reconcile_project
 from clarifi.tools.data_queries import mark_invoice_paid, query_invoices, query_transactions
 from clarifi.tools.documents import ingest_document, save_extracted_data
+from clarifi.tools.efactura import generate_efactura_xml, lookup_anaf
 from clarifi.tools.extraction import extract_fields
 from clarifi.tools.feedback import check_freshness, confirm_data, correct_data, mark_stale
 from clarifi.tools.file_manager import (
@@ -83,8 +84,10 @@ ALL_TOOLS = [
     cancel_reminder,
     # Calculator
     calculate,
-    # Invoicing
+    # Invoicing & eFactura
     emit_invoice,
+    generate_efactura_xml,
+    lookup_anaf,
     # Discovery & Search
     discover_data,
     search_data,

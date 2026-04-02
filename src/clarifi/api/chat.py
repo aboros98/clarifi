@@ -36,6 +36,8 @@ TOOL_LABELS = {
     "web_search": "Caut pe internet",
     "write_trace": "Scriu analiza",
     "emit_invoice": "Emit factura",
+    "generate_efactura_xml": "Generez eFactura XML",
+    "lookup_anaf": "Verific pe ANAF",
 }
 
 
