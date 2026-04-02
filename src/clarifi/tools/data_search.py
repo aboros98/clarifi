@@ -12,8 +12,8 @@ from sqlalchemy import or_, select
 from clarifi.db.session import get_async_session
 from clarifi.models.bank_transaction import BankTransaction
 from clarifi.models.company import Company
-from clarifi.models.contract import Contract
-from clarifi.models.invoice import Invoice
+from clarifi.models.contract import Contract, ContractStatus
+from clarifi.models.invoice import Invoice, InvoiceStatus
 
 
 @tool
@@ -94,7 +94,19 @@ async def _search_invoices(session, name, status, min_amt, max_amt,
             )
         )
     if status:
-        q = q.where(Invoice.status == status)
+        # Map common LLM terms to actual enum values
+        status_map = {
+            "unpaid": "sent", "paid": "paid", "overdue": "overdue",
+            "sent": "sent", "received": "received", "draft": "draft",
+            "cancelled": "cancelled", "restant": "overdue",
+            "neincasat": "sent", "platit": "paid",
+        }
+        mapped = status_map.get(status.lower())
+        if mapped:
+            try:
+                q = q.where(Invoice.status == InvoiceStatus(mapped))
+            except ValueError:
+                pass
     if min_amt > 0:
         q = q.where(Invoice.total_amount >= min_amt)
     if max_amt > 0:
@@ -157,7 +169,10 @@ async def _search_contracts(session, name, status, min_amt, max_amt,
             )
         )
     if status:
-        q = q.where(Contract.status == status)
+        try:
+            q = q.where(Contract.status == ContractStatus(status.upper()))
+        except ValueError:
+            pass
     if min_amt > 0:
         q = q.where(Contract.total_value >= min_amt)
     if max_amt > 0:
