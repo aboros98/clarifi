@@ -48,29 +48,32 @@ async def search_data(
     """
     limit = min(limit, 50)
 
-    async with get_async_session() as session:
-        if entity == "invoice":
-            return await _search_invoices(
-                session, name, status, min_amount, max_amount,
-                from_date, to_date, limit,
-            )
-        elif entity == "contract":
-            return await _search_contracts(
-                session, name, status, min_amount, max_amount,
-                from_date, to_date, limit,
-            )
-        elif entity == "company":
-            return await _search_companies(session, name, limit)
-        elif entity == "transaction":
-            return await _search_transactions(
-                session, name, min_amount, max_amount,
-                from_date, to_date, limit,
-            )
-        else:
-            return {
-                "error": f"Tip necunoscut: '{entity}'. "
-                "Foloseste: invoice, contract, company, transaction",
-            }
+    try:
+        async with get_async_session() as session:
+            if entity == "invoice":
+                return await _search_invoices(
+                    session, name, status, min_amount, max_amount,
+                    from_date, to_date, limit,
+                )
+            elif entity == "contract":
+                return await _search_contracts(
+                    session, name, status, min_amount, max_amount,
+                    from_date, to_date, limit,
+                )
+            elif entity == "company":
+                return await _search_companies(session, name, limit)
+            elif entity == "transaction":
+                return await _search_transactions(
+                    session, name, min_amount, max_amount,
+                    from_date, to_date, limit,
+                )
+            else:
+                return {
+                    "error": f"Tip necunoscut: '{entity}'. "
+                    "Foloseste: invoice, contract, company, transaction",
+                }
+    except Exception as e:
+        return {"error": f"Eroare la cautare: {e!s}"}
 
 
 def _parse_date(s: str) -> date | None:
