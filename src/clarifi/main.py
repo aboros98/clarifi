@@ -77,6 +77,7 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     await close_graph()
+    await engine.dispose()
     logger.info("Clarifi stopped")
 
 

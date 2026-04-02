@@ -55,10 +55,18 @@ async def query_alerts() -> dict:
                 "message": f"Factura #{inv.invoice_number} — restantă {days} zile ({inv.amount_remaining} {inv.currency})",
             })
 
-        # Overdue milestones
-        overdue_ms = (await session.execute(
-            select(ContractMilestone).where(ContractMilestone.completed == False, ContractMilestone.due_date < today)
-        )).scalars().all()
+        # Overdue milestones (scoped by company)
+        ms_q = select(ContractMilestone).where(
+            ContractMilestone.completed == False,  # noqa: E712
+            ContractMilestone.due_date < today,
+        )
+        if company_ids:
+            ms_q = ms_q.where(
+                ContractMilestone.contract_id.in_(
+                    select(Contract.id).where(Contract.counterparty_id.in_(company_ids))
+                )
+            )
+        overdue_ms = (await session.execute(ms_q)).scalars().all()
         for ms in overdue_ms:
             days = (today - ms.due_date).days
             alerts.append({
@@ -67,14 +75,18 @@ async def query_alerts() -> dict:
                 "message": f"Milestone '{ms.title}' depășit cu {days} zile",
             })
 
-        # Expiring contracts (next 30 days)
+        # Expiring contracts (scoped by company)
+        ct_filters = [
+            Contract.status == ContractStatus.ACTIVE,
+            Contract.end_date.isnot(None),
+            Contract.end_date <= today + timedelta(days=30),
+            Contract.end_date >= today,
+            Contract.is_deleted == False,  # noqa: E712
+        ]
+        if company_ids:
+            ct_filters.append(Contract.counterparty_id.in_(company_ids))
         expiring = (await session.execute(
-            select(Contract).where(
-                Contract.status == ContractStatus.ACTIVE,
-                Contract.end_date.isnot(None),
-                Contract.end_date <= today + timedelta(days=30),
-                Contract.end_date >= today, Contract.is_deleted == False,
-            )
+            select(Contract).where(*ct_filters)
         )).scalars().all()
         for c in expiring:
             days = (c.end_date - today).days
