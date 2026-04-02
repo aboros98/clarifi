@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from langchain_core.tools import tool
 from sqlalchemy import select
 
+from clarifi.agent.company_scope import get_user_company_ids
 from clarifi.db.session import get_async_session
 from clarifi.models.contract import Contract, ContractMilestone, ContractStatus
 
@@ -14,8 +15,12 @@ async def query_contracts(status: str = "active") -> dict:
     """Get contracts filtered by status. Returns contract details including value, dates, and counterparty.
     Args: status — 'active', 'all', 'expiring'."""
     today = date.today()
+    company_ids = await get_user_company_ids()
+
     async with get_async_session() as session:
         q = select(Contract).where(Contract.is_deleted == False)
+        if company_ids:
+            q = q.where(Contract.counterparty_id.in_(company_ids))
         if status == "active":
             q = q.where(Contract.status == ContractStatus.ACTIVE)
         elif status == "expiring":
@@ -52,15 +57,24 @@ async def query_milestones(days_ahead: int = 30) -> dict:
     Args: days_ahead — how many days to look ahead (default 30).
     Returns: upcoming and overdue milestones with details."""
     today = date.today()
+    company_ids = await get_user_company_ids()
+
     async with get_async_session() as session:
+        # Scope milestones to contracts belonging to user's companies
+        contract_scope = select(Contract.id).where(Contract.is_deleted == False)
+        if company_ids:
+            contract_scope = contract_scope.where(Contract.counterparty_id.in_(company_ids))
+
         upcoming_q = select(ContractMilestone).where(
             ContractMilestone.completed == False,
             ContractMilestone.due_date >= today,
             ContractMilestone.due_date <= today + timedelta(days=days_ahead),
+            ContractMilestone.contract_id.in_(contract_scope),
         )
         overdue_q = select(ContractMilestone).where(
             ContractMilestone.completed == False,
             ContractMilestone.due_date < today,
+            ContractMilestone.contract_id.in_(contract_scope),
         )
         upcoming = (await session.execute(upcoming_q)).scalars().all()
         overdue = (await session.execute(overdue_q)).scalars().all()

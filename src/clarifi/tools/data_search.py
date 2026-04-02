@@ -170,7 +170,12 @@ async def _search_invoices(session, name, status, min_amt, max_amt,
 
 async def _search_contracts(session, name, status, min_amt, max_amt,
                             from_date, to_date, limit):
+    from clarifi.agent.company_scope import get_user_company_ids
+
+    company_ids = await get_user_company_ids()
     q = select(Contract).where(Contract.is_deleted == False)  # noqa: E712
+    if company_ids:
+        q = q.where(Contract.counterparty_id.in_(company_ids))
 
     if name:
         q = q.where(
@@ -267,7 +272,14 @@ async def _search_companies(session, name, limit):
 
 async def _search_transactions(session, name, min_amt, max_amt,
                                from_date, to_date, limit):
+    from clarifi.agent.context import current_user_id
+    from clarifi.models.document import Document
+
+    uid = current_user_id.get()
     q = select(BankTransaction)
+    if uid:
+        user_doc_ids = select(Document.id).where(Document.user_id == uid)
+        q = q.where(BankTransaction.source_document_id.in_(user_doc_ids))
 
     if name:
         q = q.where(

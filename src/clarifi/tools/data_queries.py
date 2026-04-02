@@ -88,7 +88,11 @@ async def query_transactions(
     Returns list of transactions with amounts, counterparties, matching status."""
     from datetime import date, timedelta
 
+    from clarifi.agent.company_scope import get_user_company_ids
+    from clarifi.models.document import Document
+
     cutoff = date.today() - timedelta(days=days)
+    company_ids = await get_user_company_ids()
 
     async with get_async_session() as session:
         q = (
@@ -97,6 +101,13 @@ async def query_transactions(
             .order_by(BankTransaction.transaction_date.desc())
             .limit(min(limit, 200))
         )
+        # Scope: only transactions from documents owned by the current user
+        if company_ids:
+            from clarifi.agent.context import current_user_id
+            uid = current_user_id.get()
+            if uid:
+                user_doc_ids = select(Document.id).where(Document.user_id == uid)
+                q = q.where(BankTransaction.source_document_id.in_(user_doc_ids))
         txns = (await session.execute(q)).scalars().all()
 
     return {

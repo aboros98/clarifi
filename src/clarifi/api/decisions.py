@@ -1,8 +1,10 @@
 """Decision log and audit trail API endpoints."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import func, select
 
+from clarifi.agent.context import current_user_id
+from clarifi.api.chat import _extract_user_id
 from clarifi.db.session import get_async_session
 from clarifi.models.decision_log import AgentSession, DecisionLog
 
@@ -11,20 +13,24 @@ router = APIRouter(prefix="/api", tags=["decisions"])
 
 @router.get("/decisions")
 async def list_decisions(
+    request: Request,
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     decision_type: str | None = None,
     session_id: str | None = None,
 ):
     """List decision log entries with pagination and filtering."""
+    user_id = _extract_user_id(request)
+    current_user_id.set(user_id)
+
     async with get_async_session() as session:
-        q = select(DecisionLog).order_by(DecisionLog.timestamp.desc())
+        q = select(DecisionLog).where(DecisionLog.user_id == user_id).order_by(DecisionLog.timestamp.desc())
         if decision_type:
             q = q.where(DecisionLog.decision_type == decision_type)
         if session_id:
             q = q.where(DecisionLog.session_id == session_id)
 
-        total_q = select(func.count(DecisionLog.id))
+        total_q = select(func.count(DecisionLog.id)).where(DecisionLog.user_id == user_id)
         if decision_type:
             total_q = total_q.where(DecisionLog.decision_type == decision_type)
         total = (await session.execute(total_q)).scalar_one()
@@ -55,11 +61,14 @@ async def list_decisions(
 
 
 @router.get("/decisions/{decision_id}")
-async def get_decision(decision_id: str):
+async def get_decision(request: Request, decision_id: str):
     """Get a single decision log entry with full details."""
+    user_id = _extract_user_id(request)
+    current_user_id.set(user_id)
+
     async with get_async_session() as session:
         d = await session.get(DecisionLog, decision_id)
-        if not d:
+        if not d or d.user_id != user_id:
             raise HTTPException(status_code=404, detail="Decision not found")
     return {
         "id": d.id,
@@ -77,11 +86,15 @@ async def get_decision(decision_id: str):
 
 
 @router.get("/sessions")
-async def list_sessions(limit: int = Query(20, le=100)):
-    """List agent conversation sessions."""
+async def list_sessions(request: Request, limit: int = Query(20, le=100)):
+    """List agent conversation sessions for the authenticated user."""
+    user_id = _extract_user_id(request)
+    current_user_id.set(user_id)
+
     async with get_async_session() as session:
         sessions = (await session.execute(
             select(AgentSession)
+            .where(AgentSession.user_id == user_id)
             .order_by(AgentSession.started_at.desc())
             .limit(limit)
         )).scalars().all()

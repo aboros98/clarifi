@@ -204,6 +204,8 @@ async def query_receivables(status: str = "all") -> dict:
 async def query_profitability(project_code: str | None = None) -> dict:
     """Get profit margins. If project_code given, returns for that project. Otherwise returns global + all projects.
     Returns: revenue, costs, profit, margin_pct, and per-project breakdown."""
+    company_ids = await get_user_company_ids()
+
     async with get_async_session() as session:
         base_rev = select(func.coalesce(func.sum(Invoice.total_amount), 0)).where(
             Invoice.direction == InvoiceDirection.ISSUED,
@@ -215,6 +217,9 @@ async def query_profitability(project_code: str | None = None) -> dict:
             Invoice.status != InvoiceStatus.CANCELLED,
             Invoice.is_deleted == False,
         )
+        if company_ids:
+            base_rev = base_rev.where(_invoice_belongs_to(company_ids))
+            base_cost = base_cost.where(_invoice_belongs_to(company_ids))
 
         if project_code:
             proj = (await session.execute(
@@ -254,6 +259,9 @@ async def query_profitability(project_code: str | None = None) -> dict:
             .where(Invoice.direction == InvoiceDirection.RECEIVED, Invoice.status != InvoiceStatus.CANCELLED, Invoice.is_deleted == False, Invoice.project_id.isnot(None))
             .group_by(Invoice.project_id)
         )
+        if company_ids:
+            proj_rev_q = proj_rev_q.where(_invoice_belongs_to(company_ids))
+            proj_cost_q = proj_cost_q.where(_invoice_belongs_to(company_ids))
         rev_map = dict((await session.execute(proj_rev_q)).all())
         cost_map = dict((await session.execute(proj_cost_q)).all())
 

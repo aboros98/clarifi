@@ -61,6 +61,11 @@ async def run_payment_matching() -> dict:
     """Auto-match unmatched bank credit transactions to unpaid issued invoices.
     Returns suggested matches with confidence scores for user confirmation."""
 
+    from clarifi.agent.company_scope import get_user_company_ids
+    from sqlalchemy import or_
+
+    company_ids = await get_user_company_ids()
+
     async with get_async_session() as session:
         # Unmatched credit transactions
         txns = (await session.execute(
@@ -71,14 +76,18 @@ async def run_payment_matching() -> dict:
             ).order_by(BankTransaction.transaction_date.desc()).limit(50)
         )).scalars().all()
 
-        # Unpaid issued invoices
-        invoices = (await session.execute(
-            select(Invoice).where(
-                Invoice.direction == InvoiceDirection.ISSUED,
-                Invoice.status.not_in([InvoiceStatus.PAID, InvoiceStatus.CANCELLED]),
-                Invoice.is_deleted == False,
-            ).limit(100)
-        )).scalars().all()
+        # Unpaid issued invoices — scoped to user's companies
+        inv_q = select(Invoice).where(
+            Invoice.direction == InvoiceDirection.ISSUED,
+            Invoice.status.not_in([InvoiceStatus.PAID, InvoiceStatus.CANCELLED]),
+            Invoice.is_deleted == False,
+        )
+        if company_ids:
+            inv_q = inv_q.where(or_(
+                Invoice.issuer_company_id.in_(company_ids),
+                Invoice.recipient_company_id.in_(company_ids),
+            ))
+        invoices = (await session.execute(inv_q.limit(100))).scalars().all()
 
         suggestions = []
         for txn in txns:

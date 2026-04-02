@@ -8,6 +8,8 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
+from clarifi.agent.context import current_user_id
+from clarifi.api.chat import _extract_user_id
 from clarifi.config import settings
 from clarifi.db.session import get_async_session
 from clarifi.models.integration import IntegrationConfig
@@ -43,11 +45,13 @@ async def drive_auth_redirect():
 @router.post("/drive/callback")
 async def drive_auth_callback(request: Request):
     """Handle Google Drive OAuth2 callback. Exchanges code for tokens."""
+    user_id = _extract_user_id(request)
+    current_user_id.set(user_id)
+
     body = await request.json()
     code = body.get("code")
     if not code:
         raise HTTPException(status_code=400, detail="Missing authorization code")
-
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(
@@ -64,10 +68,13 @@ async def drive_auth_callback(request: Request):
             raise HTTPException(status_code=502, detail=f"Token exchange failed: {resp.text[:200]}")
         tokens = resp.json()
 
-    # Save tokens to integration_configs
+    # Save tokens to integration_configs (scoped by user)
     async with get_async_session() as session:
         existing = (await session.execute(
-            select(IntegrationConfig).where(IntegrationConfig.provider == "google_drive")
+            select(IntegrationConfig).where(
+                IntegrationConfig.provider == "google_drive",
+                IntegrationConfig.user_id == user_id,
+            )
         )).scalar_one_or_none()
 
         if existing:
@@ -80,17 +87,24 @@ async def drive_auth_callback(request: Request):
                 config=tokens,
                 status="connected",
                 connected_at=datetime.now(timezone.utc),
+                user_id=user_id,
             ))
 
     return {"status": "connected", "provider": "google_drive"}
 
 
 @router.get("/drive/status")
-async def drive_status():
-    """Check Google Drive connection status."""
+async def drive_status(request: Request):
+    """Check Google Drive connection status for the authenticated user."""
+    user_id = _extract_user_id(request)
+    current_user_id.set(user_id)
+
     async with get_async_session() as session:
         config = (await session.execute(
-            select(IntegrationConfig).where(IntegrationConfig.provider == "google_drive")
+            select(IntegrationConfig).where(
+                IntegrationConfig.provider == "google_drive",
+                IntegrationConfig.user_id == user_id,
+            )
         )).scalar_one_or_none()
 
     if not config:

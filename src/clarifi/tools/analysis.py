@@ -4,13 +4,22 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from langchain_core.tools import tool
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
+from clarifi.agent.company_scope import get_user_company_ids
 from clarifi.db.session import get_async_session
 from clarifi.models.bank_transaction import BankTransaction
 from clarifi.models.company import Company
 from clarifi.models.contract import Contract, ContractMilestone, ContractStatus
 from clarifi.models.invoice import Invoice, InvoiceDirection, InvoiceStatus
+
+
+def _invoice_belongs_to(company_ids: list[str]):
+    """Filter: invoice where our company is issuer OR recipient."""
+    return or_(
+        Invoice.issuer_company_id.in_(company_ids),
+        Invoice.recipient_company_id.in_(company_ids),
+    )
 
 
 @tool
@@ -19,16 +28,19 @@ async def detect_unissued_invoices() -> dict:
     Checks completed milestones without matching invoices and recurring billing gaps.
     Returns list of missing invoices with contract details."""
     today = date.today()
+    company_ids = await get_user_company_ids()
 
     async with get_async_session() as session:
-        # Find completed milestones with amounts but no matching invoice
-        milestones = (await session.execute(
-            select(ContractMilestone).where(
-                ContractMilestone.completed == True,
-                ContractMilestone.amount.isnot(None),
-                ContractMilestone.amount > 0,
-            )
-        )).scalars().all()
+        # Scope milestones to contracts belonging to user's companies
+        ms_q = select(ContractMilestone).where(
+            ContractMilestone.completed == True,
+            ContractMilestone.amount.isnot(None),
+            ContractMilestone.amount > 0,
+        )
+        if company_ids:
+            contract_scope = select(Contract.id).where(Contract.counterparty_id.in_(company_ids))
+            ms_q = ms_q.where(ContractMilestone.contract_id.in_(contract_scope))
+        milestones = (await session.execute(ms_q)).scalars().all()
 
         missing = []
         for ms in milestones:
@@ -42,6 +54,8 @@ async def detect_unissued_invoices() -> dict:
                 Invoice.total_amount >= ms.amount * Decimal("0.9"),
                 Invoice.total_amount <= ms.amount * Decimal("1.1"),
             )
+            if company_ids:
+                inv_q = inv_q.where(_invoice_belongs_to(company_ids))
             count = (await session.execute(inv_q)).scalar_one()
 
             if count == 0:
@@ -58,13 +72,14 @@ async def detect_unissued_invoices() -> dict:
                 })
 
         # Find contracts with billing_frequency='monthly' that missed a month
-        monthly_contracts = (await session.execute(
-            select(Contract).where(
-                Contract.status == ContractStatus.ACTIVE,
-                Contract.billing_frequency == "monthly",
-                Contract.is_deleted == False,
-            )
-        )).scalars().all()
+        mc_q = select(Contract).where(
+            Contract.status == ContractStatus.ACTIVE,
+            Contract.billing_frequency == "monthly",
+            Contract.is_deleted == False,
+        )
+        if company_ids:
+            mc_q = mc_q.where(Contract.counterparty_id.in_(company_ids))
+        monthly_contracts = (await session.execute(mc_q)).scalars().all()
 
         for c in monthly_contracts:
             # Check last invoice date for this contract
@@ -74,6 +89,8 @@ async def detect_unissued_invoices() -> dict:
                 Invoice.status != InvoiceStatus.CANCELLED,
                 Invoice.is_deleted == False,
             )
+            if company_ids:
+                last_inv_q = last_inv_q.where(_invoice_belongs_to(company_ids))
             last_date = (await session.execute(last_inv_q)).scalar_one()
 
             if last_date and (today - last_date).days > 35:
@@ -100,6 +117,7 @@ async def project_cashflow_daily(days: int = 60) -> dict:
     Shows when cash might go negative. Returns day-by-day projection.
     Args: days — how many days to project (default 60)."""
     today = date.today()
+    company_ids = await get_user_company_ids()
 
     async with get_async_session() as session:
         # Current cash
@@ -126,6 +144,9 @@ async def project_cashflow_daily(days: int = 60) -> dict:
             Invoice.due_date <= today + timedelta(days=days),
             Invoice.is_deleted == False,
         )
+        if company_ids:
+            inflows_q = inflows_q.where(_invoice_belongs_to(company_ids))
+            outflows_q = outflows_q.where(_invoice_belongs_to(company_ids))
 
         inflows = (await session.execute(inflows_q)).all()
         outflows = (await session.execute(outflows_q)).all()
@@ -186,16 +207,18 @@ async def score_client_risk() -> dict:
     Considers: average days late, total overdue amount, payment pattern.
     Returns clients sorted by risk (highest first)."""
     today = date.today()
+    company_ids = await get_user_company_ids()
 
     async with get_async_session() as session:
         # All issued invoices (paid + unpaid) grouped by recipient
-        invoices = (await session.execute(
-            select(Invoice).where(
-                Invoice.direction == InvoiceDirection.ISSUED,
-                Invoice.status != InvoiceStatus.CANCELLED,
-                Invoice.is_deleted == False,
-            ).limit(500)
-        )).scalars().all()
+        inv_q = select(Invoice).where(
+            Invoice.direction == InvoiceDirection.ISSUED,
+            Invoice.status != InvoiceStatus.CANCELLED,
+            Invoice.is_deleted == False,
+        )
+        if company_ids:
+            inv_q = inv_q.where(_invoice_belongs_to(company_ids))
+        invoices = (await session.execute(inv_q.limit(500))).scalars().all()
 
     # Group by recipient company
     clients: dict[str, dict] = {}

@@ -10,8 +10,10 @@ what data is available for the current user/company.
 from datetime import date
 
 from langchain_core.tools import tool
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
+from clarifi.agent.company_scope import get_user_company_ids
+from clarifi.agent.context import current_user_id
 from clarifi.db.session import get_async_session
 from clarifi.models.bank_transaction import BankTransaction
 from clarifi.models.company import Company, CompanyRole
@@ -36,41 +38,58 @@ async def discover_data() -> dict:
     - Dacă lipsesc contracte → nu poți verifica obligații
     """
     today = date.today()
+    company_ids = await get_user_company_ids()
+    uid = current_user_id.get()
+
+    def _inv_scope():
+        if company_ids:
+            return or_(
+                Invoice.issuer_company_id.in_(company_ids),
+                Invoice.recipient_company_id.in_(company_ids),
+            )
+        return True
 
     async with get_async_session() as session:
         # Company
         own = (await session.execute(
             select(Company).where(
                 Company.role == CompanyRole.OWN_COMPANY,
+                Company.id.in_(company_ids) if company_ids else True,
             )
         )).scalar_one_or_none()
 
-        # Counts
+        # Counts — scoped to user's companies
         n_invoices_issued = (await session.execute(
             select(func.count(Invoice.id)).where(
                 Invoice.direction == InvoiceDirection.ISSUED,
+                _inv_scope(),
             )
         )).scalar_one()
 
         n_invoices_received = (await session.execute(
             select(func.count(Invoice.id)).where(
                 Invoice.direction == InvoiceDirection.RECEIVED,
+                _inv_scope(),
             )
         )).scalar_one()
 
-        n_contracts = (await session.execute(
-            select(func.count(Contract.id))
-        )).scalar_one()
+        contract_q = select(func.count(Contract.id))
+        if company_ids:
+            contract_q = contract_q.where(Contract.counterparty_id.in_(company_ids))
+        n_contracts = (await session.execute(contract_q)).scalar_one()
 
-        n_bank_txns = (await session.execute(
-            select(func.count(BankTransaction.id))
-        )).scalar_one()
+        bank_q = select(func.count(BankTransaction.id))
+        if uid:
+            user_doc_ids = select(Document.id).where(Document.user_id == uid)
+            bank_q = bank_q.where(BankTransaction.source_document_id.in_(user_doc_ids))
+        n_bank_txns = (await session.execute(bank_q)).scalar_one()
 
-        n_documents = (await session.execute(
-            select(func.count(Document.id)).where(
-                Document.is_deleted == False,  # noqa: E712
-            )
-        )).scalar_one()
+        doc_q = select(func.count(Document.id)).where(
+            Document.is_deleted == False,  # noqa: E712
+        )
+        if uid:
+            doc_q = doc_q.where(Document.user_id == uid)
+        n_documents = (await session.execute(doc_q)).scalar_one()
 
         n_estimates = (await session.execute(
             select(func.count(Estimate.id))
@@ -82,21 +101,26 @@ async def discover_data() -> dict:
             )
         )).scalar_one()
 
-        n_reminders = (await session.execute(
-            select(func.count(ScheduledTask.id)).where(
-                ScheduledTask.is_active == True,  # noqa: E712
-            )
-        )).scalar_one()
+        reminder_q = select(func.count(ScheduledTask.id)).where(
+            ScheduledTask.is_active == True,  # noqa: E712
+        )
+        if uid:
+            reminder_q = reminder_q.where(ScheduledTask.user_id == uid)
+        n_reminders = (await session.execute(reminder_q)).scalar_one()
 
         # Latest bank transaction date
-        latest_bank = (await session.execute(
-            select(func.max(BankTransaction.transaction_date))
-        )).scalar_one()
+        latest_bank_q = select(func.max(BankTransaction.transaction_date))
+        if uid:
+            latest_bank_q = latest_bank_q.where(
+                BankTransaction.source_document_id.in_(
+                    select(Document.id).where(Document.user_id == uid)
+                )
+            )
+        latest_bank = (await session.execute(latest_bank_q)).scalar_one()
 
         # Latest invoice date
-        latest_invoice = (await session.execute(
-            select(func.max(Invoice.issue_date))
-        )).scalar_one()
+        latest_inv_q = select(func.max(Invoice.issue_date)).where(_inv_scope())
+        latest_invoice = (await session.execute(latest_inv_q)).scalar_one()
 
     # Build gaps list
     gaps = []

@@ -36,9 +36,16 @@ async def get_kpis(request: Request):
     recent_activity = []
     try:
         async with get_async_session() as session:
+            # Scope runs to tasks owned by this user
+            user_task_ids_q = select(ScheduledTask.id).where(ScheduledTask.user_id == user_id)
+            user_task_ids = set((await session.execute(user_task_ids_q)).scalars().all())
+
             runs = (await session.execute(
                 select(SchedulerRun)
-                .where(SchedulerRun.output.isnot(None))
+                .where(
+                    SchedulerRun.output.isnot(None),
+                    SchedulerRun.task_id.in_(user_task_ids),
+                )
                 .order_by(SchedulerRun.started_at.desc())
                 .limit(5)
             )).scalars().all()

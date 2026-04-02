@@ -75,11 +75,15 @@ async def list_folders(parent_path: str = "/") -> dict:
     """List folders and files at a given path. Shows the folder tree.
     Args: parent_path — "/" for root, "/Contracte" for a subfolder."""
 
+    uid = current_user_id.get()
+
     async with get_async_session() as session:
         if parent_path == "/":
+            q = select(VirtualFolder).where(VirtualFolder.parent_id.is_(None))
+            if uid:
+                q = q.where(VirtualFolder.user_id == uid)
             folders = (await session.execute(
-                select(VirtualFolder).where(VirtualFolder.parent_id.is_(None))
-                .order_by(VirtualFolder.name)
+                q.order_by(VirtualFolder.name)
             )).scalars().all()
         else:
             parent = (await session.execute(
@@ -87,9 +91,11 @@ async def list_folders(parent_path: str = "/") -> dict:
             )).scalar_one_or_none()
             if not parent:
                 return {"error": f"Folder '{parent_path}' not found"}
+            q = select(VirtualFolder).where(VirtualFolder.parent_id == parent.id)
+            if uid:
+                q = q.where(VirtualFolder.user_id == uid)
             folders = (await session.execute(
-                select(VirtualFolder).where(VirtualFolder.parent_id == parent.id)
-                .order_by(VirtualFolder.name)
+                q.order_by(VirtualFolder.name)
             )).scalars().all()
 
         # Get files in current folder
@@ -262,9 +268,14 @@ async def read_document_content(document_id: str, max_chars: int = 5000) -> dict
 @tool
 async def get_file_tree() -> dict:
     """Get the complete folder/file tree structure. Shows how documents are organized."""
+    uid = current_user_id.get()
+
     async with get_async_session() as session:
+        folder_q = select(VirtualFolder)
+        if uid:
+            folder_q = folder_q.where(VirtualFolder.user_id == uid)
         folders = (await session.execute(
-            select(VirtualFolder).order_by(VirtualFolder.path)
+            folder_q.order_by(VirtualFolder.path)
         )).scalars().all()
 
         # Count total files

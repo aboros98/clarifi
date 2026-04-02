@@ -2,9 +2,11 @@
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import select
 
+from clarifi.agent.context import current_user_id
+from clarifi.api.chat import _extract_user_id
 from clarifi.db.session import get_async_session
 from clarifi.models.document import Document
 
@@ -20,12 +22,16 @@ def _status_value(d):
 
 
 @router.get("/documents")
-async def list_documents(limit: int = Query(50, le=200), offset: int = 0):
-    """List all processed documents."""
+async def list_documents(request: Request, limit: int = Query(50, le=200), offset: int = 0):
+    """List all processed documents for the authenticated user."""
+    user_id = _extract_user_id(request)
+    current_user_id.set(user_id)
+
     async with get_async_session() as session:
         docs = (await session.execute(
             select(Document)
             .where(Document.is_deleted == False)
+            .where(Document.user_id == user_id)
             .order_by(Document.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -50,11 +56,14 @@ async def list_documents(limit: int = Query(50, le=200), offset: int = 0):
 
 
 @router.get("/documents/{doc_id}")
-async def get_document(doc_id: str):
+async def get_document(request: Request, doc_id: str):
     """Get document details including extracted text."""
+    user_id = _extract_user_id(request)
+    current_user_id.set(user_id)
+
     async with get_async_session() as session:
         d = await session.get(Document, doc_id)
-        if not d:
+        if not d or d.user_id != user_id:
             raise HTTPException(status_code=404, detail="Document not found")
 
     return {
@@ -75,11 +84,14 @@ async def get_document(doc_id: str):
 
 
 @router.delete("/documents/{doc_id}")
-async def delete_document(doc_id: str):
+async def delete_document(request: Request, doc_id: str):
     """Delete a document — clears hash so same file can be re-uploaded."""
+    user_id = _extract_user_id(request)
+    current_user_id.set(user_id)
+
     async with get_async_session() as session:
         d = await session.get(Document, doc_id)
-        if not d:
+        if not d or d.user_id != user_id:
             raise HTTPException(status_code=404, detail="Document not found")
         d.is_deleted = True
         d.deleted_at = datetime.now(UTC)

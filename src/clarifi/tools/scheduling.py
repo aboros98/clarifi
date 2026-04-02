@@ -82,8 +82,13 @@ async def create_reminder(
 @tool
 async def list_reminders() -> dict:
     """List all active scheduled reminders and tasks."""
+    uid = current_user_id.get()
+
     async with get_async_session() as session:
-        q = select(ScheduledTask).where(ScheduledTask.is_active == True).order_by(ScheduledTask.next_run_at).limit(20)
+        q = select(ScheduledTask).where(ScheduledTask.is_active == True)
+        if uid:
+            q = q.where(ScheduledTask.user_id == uid)
+        q = q.order_by(ScheduledTask.next_run_at).limit(20)
         tasks = (await session.execute(q)).scalars().all()
 
     return {
