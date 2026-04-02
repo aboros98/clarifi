@@ -279,10 +279,22 @@ async def _save_contract(session, data, document_id, freshness, now):
     if not counterparty_id:
         return {"error": "Nu pot salva contractul — lipseste contrapartea si compania proprie"}
 
+    # Map contract_type string to enum
+    from clarifi.models.contract import ContractType
+
+    ct_str = (data.get("contract_type") or "service").lower()
+    try:
+        ct = ContractType(ct_str)
+    except ValueError:
+        ct = ContractType.SERVICE
+
     contract = Contract(
         contract_number=data["contract_number"],
         title=data.get("contract_number", "Untitled"),
         counterparty_id=counterparty_id,
+        contract_type=ct,
+        is_recurring=bool(data.get("is_recurring", False)),
+        recurring_amount=_safe_decimal(data.get("recurring_amount")),
         total_value=_safe_decimal(data.get("total_value")),
         currency=data.get("currency", "RON"),
         start_date=_to_date(data.get("start_date")),

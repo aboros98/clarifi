@@ -18,6 +18,16 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .base import AuditMixin, Base, FreshnessMixin, SoftDeleteMixin, SourceTraceableMixin
 
 
+class ContractType(str, enum.Enum):
+    SERVICE = "service"           # Prestari servicii
+    CIM = "cim"                   # Contract individual de munca
+    LEASING = "leasing"           # Leasing auto/echipamente
+    UTILITIES = "utilities"       # Curent, gaz, internet, telefon
+    RENT = "rent"                 # Chirie
+    SUBSCRIPTION = "subscription" # Abonamente software, SaaS
+    OTHER = "other"
+
+
 class ContractStatus(str, enum.Enum):
     DRAFT = "draft"
     ACTIVE = "active"
@@ -61,6 +71,18 @@ class Contract(Base, AuditMixin, SoftDeleteMixin, SourceTraceableMixin, Freshnes
         default=ContractStatus.DRAFT,
         nullable=False,
     )
+
+    contract_type: Mapped[ContractType] = mapped_column(
+        Enum(ContractType, name="contract_type_enum"),
+        default=ContractType.SERVICE,
+        nullable=False,
+    )
+
+    # Recurring payment info (CIM salaries, leasing, rent, utilities)
+    is_recurring: Mapped[bool] = mapped_column(default=False, nullable=False)
+    recurring_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(15, 2), nullable=True,
+    )  # Monthly amount if recurring
 
     payment_terms_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     billing_frequency: Mapped[str | None] = mapped_column(String(50), nullable=True)

@@ -14,9 +14,13 @@ class DocumentType(str, enum.Enum):
     INVOICE_ISSUED = "invoice_issued"
     INVOICE_RECEIVED = "invoice_received"
     CONTRACT = "contract"
+    CIM = "cim"                       # Contract individual de munca
+    LEASING_CONTRACT = "leasing_contract"
+    UTILITY_BILL = "utility_bill"
     ESTIMATE = "estimate"
     BANK_STATEMENT = "bank_statement"
     PAYMENT_PROOF = "payment_proof"
+    PAYSLIP = "payslip"               # Fluturas de salariu
     OTHER = "other"
 
 

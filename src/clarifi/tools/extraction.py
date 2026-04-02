@@ -31,18 +31,23 @@ class ExtractedInvoice(BaseModel):
     is_incoming: bool | None = None
     contract_reference: str | None = None
     payment_reference: str | None = None
+    is_deductible: bool | None = None      # For received invoices: is this a tax-deductible expense?
+    expense_category: str | None = None    # operational, investment, salary, utilities, rent, other
     line_items: list[dict] = []
     field_confidences: dict = {}
 
 class ExtractedContract(BaseModel):
     document_type: str = "contract"
     contract_number: str | None = None
+    contract_type: str | None = None  # service, cim, leasing, utilities, rent, subscription
     client_name: str | None = None
     client_tax_id: str | None = None
     total_value: float | None = None
     currency: str = "RON"
     start_date: str | None = None
     end_date: str | None = None
+    is_recurring: bool = False
+    recurring_amount: float | None = None  # Monthly payment amount
     payment_terms: str | None = None
     payment_terms_days: int | None = None
     billing_frequency: str | None = None
@@ -116,10 +121,18 @@ Output: {{"document_type":"contract","contract_number":"CTR-2025-001","client_na
 
 SCHEMA_INSTRUCTIONS = {
     "invoice": """Câmpuri pentru FACTURĂ:
-invoice_number, vendor_or_client_name, vendor_or_client_tax_id, issue_date (YYYY-MM-DD), due_date (YYYY-MM-DD), subtotal, vat_amount, total_amount, currency, is_incoming (true dacă noi primim factura, false dacă noi emitem), contract_reference, payment_reference, line_items [{description, quantity, unit_price, amount}], field_confidences""",
+invoice_number, vendor_or_client_name, vendor_or_client_tax_id, issue_date (YYYY-MM-DD), due_date (YYYY-MM-DD), subtotal, vat_amount, total_amount, currency, is_incoming (true dacă noi primim factura, false dacă noi emitem), contract_reference, payment_reference, is_deductible (true/false — doar pentru facturi primite: e cheltuială deductibilă fiscal?), expense_category (operational/investment/salary/utilities/rent/other — doar pentru facturi primite), line_items [{description, quantity, unit_price, amount}], field_confidences""",
 
     "contract": """Câmpuri pentru CONTRACT:
-contract_number, client_name, client_tax_id, total_value, currency, start_date (YYYY-MM-DD), end_date (YYYY-MM-DD), payment_terms, payment_terms_days, billing_frequency, milestones [{name, due_date, amount}], penalties [...], obligations [...], field_confidences""",
+contract_number, contract_type (OBLIGATORIU — unul din: service=prestări servicii, cim=contract individual de muncă, leasing=leasing auto/echipamente, utilities=curent/gaz/internet, rent=chirie, subscription=abonamente software, other), client_name, client_tax_id, total_value, currency, start_date (YYYY-MM-DD), end_date (YYYY-MM-DD), is_recurring (true dacă are plăți lunare/periodice — CIM, leasing, chirie, utilități sunt ÎNTOTDEAUNA recurring), recurring_amount (suma lunară dacă is_recurring=true), payment_terms, payment_terms_days, billing_frequency, milestones [{name, due_date, amount}], penalties [...], obligations [...], field_confidences
+
+REGULI contract_type:
+- Menționează "muncă" sau "angajat" sau "salariu" → cim
+- Menționează "leasing" sau "rată" auto/echipament → leasing
+- Menționează "curent" sau "gaz" sau "internet" sau "telefon" → utilities
+- Menționează "chirie" sau "închiriere" → rent
+- Menționează "abonament" sau "licență software" → subscription
+- Altfel → service""",
 
     "bank_statement": """Câmpuri pentru EXTRAS DE CONT:
 bank_name, account_iban, statement_period_start (YYYY-MM-DD), statement_period_end (YYYY-MM-DD), opening_balance, closing_balance, currency, transactions [{date (YYYY-MM-DD), description, amount (pozitiv=intrare, negativ=ieșire), reference, counterparty}], field_confidences""",

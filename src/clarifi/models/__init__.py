@@ -14,6 +14,7 @@ from .contract import (
     ContractObligation,
     ContractPenalty,
     ContractStatus,
+    ContractType,
 )
 from .decision_log import AgentSession, DecisionLog, SchedulerRun
 from .document import Document, DocumentProcessingLog, DocumentType, ProcessingStatus
@@ -41,6 +42,7 @@ __all__ = [
     "ContractObligation",
     "ContractPenalty",
     "ContractStatus",
+    "ContractType",
     "Document",
     "DocumentProcessingLog",
     "DocumentType",

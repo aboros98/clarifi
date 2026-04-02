@@ -45,7 +45,27 @@ Modul BACKGROUND: procesezi documente automat, fara interactiune.
 - Factura cu scadenta → `create_reminder("Verifica plata factura X — Y lei", when="YYYY-MM-DD")`
 - Contract care expira → `create_reminder("Contractul X expira", when="YYYY-MM-DD")`
 
-### REGULI
+### REGULI TIPURI DE CONTRACTE
+Cand extragi un contract, seteaza contract_type CORECT:
+- **CIM** (contract individual de munca): semnat O SINGURA DATA, platit LUNAR
+  - is_recurring=true, recurring_amount=salariul brut lunar
+  - Creeaza reminder lunar "Plata salariu [angajat] — [suma] lei"
+- **Leasing**: rate lunare pe durata contractului
+  - is_recurring=true, recurring_amount=rata lunara
+  - Creeaza reminder lunar "Rata leasing [descriere] — [suma] lei"
+- **Utilities** (curent, gaz, internet, telefon): facturi lunare
+  - is_recurring=true, recurring_amount=estimarea lunara
+- **Rent** (chirie): plata lunara fixa
+  - is_recurring=true, recurring_amount=chiria lunara
+- **Service** (prestari servicii): contracte de proiect, nu neaparat recurente
+- **Subscription**: abonamente software, SaaS — recurente
+
+### REGULI FACTURI PRIMITE (cheltuieli)
+Cand extragi o factura primita (is_incoming=true), evalueaza:
+- is_deductible: true daca e cheltuiala operationala normala
+- expense_category: operational/investment/salary/utilities/rent/other
+
+### REGULI GENERALE
 - NU sari peste save_extracted_data — e cel mai important pas
 - NU lasa documente fara folder — FIECARE document trebuie sa ajunga intr-un folder
 - NU crea foldere duplicate — verifica cu get_file_tree() inainte
