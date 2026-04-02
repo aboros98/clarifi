@@ -18,6 +18,11 @@ async def query_alerts() -> dict:
     today = date.today()
     alerts = []
 
+    from clarifi.agent.company_scope import get_user_company_ids
+    from sqlalchemy import or_
+
+    company_ids = await get_user_company_ids()
+
     async with get_async_session() as session:
         # Persisted alerts
         db_alerts = (await session.execute(
@@ -27,12 +32,20 @@ async def query_alerts() -> dict:
             alerts.append({"type": a.alert_type.value, "severity": a.severity.value, "message": a.message})
 
         # Real-time: overdue invoices
+        inv_filters = [
+            Invoice.direction == InvoiceDirection.ISSUED,
+            Invoice.status.not_in([InvoiceStatus.PAID, InvoiceStatus.CANCELLED]),
+            Invoice.due_date < today,
+            Invoice.is_deleted == False,  # noqa: E712
+        ]
+        if company_ids:
+            inv_filters.append(or_(
+                Invoice.issuer_company_id.in_(company_ids),
+                Invoice.recipient_company_id.in_(company_ids),
+            ))
         overdue = (await session.execute(
-            select(Invoice).where(
-                Invoice.direction == InvoiceDirection.ISSUED,
-                Invoice.status.not_in([InvoiceStatus.PAID, InvoiceStatus.CANCELLED]),
-                Invoice.due_date < today, Invoice.is_deleted == False,
-            ).order_by(Invoice.due_date).limit(50)
+            select(Invoice).where(*inv_filters)
+            .order_by(Invoice.due_date).limit(50)
         )).scalars().all()
         for inv in overdue:
             days = (today - inv.due_date).days

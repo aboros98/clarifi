@@ -4,12 +4,21 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from langchain_core.tools import tool
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
+from clarifi.agent.company_scope import get_user_company_ids
 from clarifi.db.session import get_async_session
 from clarifi.models.bank_transaction import BankTransaction, TransactionType
 from clarifi.models.invoice import Invoice, InvoiceDirection, InvoiceStatus
 from clarifi.models.project import Project, ProjectStatus
+
+
+def _invoice_belongs_to(company_ids: list[str]):
+    """Filter: invoice where our company is issuer OR recipient."""
+    return or_(
+        Invoice.issuer_company_id.in_(company_ids),
+        Invoice.recipient_company_id.in_(company_ids),
+    )
 
 
 @tool
@@ -18,6 +27,7 @@ async def query_cashflow() -> dict:
     COMMITTED (contract value not yet invoiced), and RISK indicators.
     This is the primary financial overview tool."""
     today = date.today()
+    company_ids = await get_user_company_ids()
 
     async with get_async_session() as session:
         # ACTUAL: latest bank balance (real money)
@@ -42,9 +52,12 @@ async def query_cashflow() -> dict:
         burn_rate = burn_total / 3 if burn_total > 0 else Decimal("0")
 
         # EXPECTED: unpaid invoices (projected, not yet in bank)
+        inv_scope = _invoice_belongs_to(company_ids) if company_ids else True
+
         async def _sum_invoices(direction, days):
             cutoff = today + timedelta(days=days)
             q = select(func.coalesce(func.sum(Invoice.amount_remaining), 0)).where(
+                inv_scope,
                 Invoice.direction == direction,
                 Invoice.status.not_in([InvoiceStatus.PAID, InvoiceStatus.CANCELLED]),
                 Invoice.due_date <= cutoff,
@@ -59,6 +72,7 @@ async def query_cashflow() -> dict:
 
         # EXPECTED: overdue receivables (subset — already past due)
         overdue_q = select(func.coalesce(func.sum(Invoice.amount_remaining), 0)).where(
+            inv_scope,
             Invoice.direction == InvoiceDirection.ISSUED,
             Invoice.status.not_in([InvoiceStatus.PAID, InvoiceStatus.CANCELLED]),
             Invoice.due_date < today,
@@ -74,6 +88,7 @@ async def query_cashflow() -> dict:
         contract_total = Decimal(str((await session.execute(contract_total_q)).scalar_one()))
 
         invoiced_total_q = select(func.coalesce(func.sum(Invoice.total_amount), 0)).where(
+            inv_scope,
             Invoice.direction == InvoiceDirection.ISSUED,
             Invoice.contract_id.isnot(None),
             Invoice.status != InvoiceStatus.CANCELLED,
@@ -130,15 +145,20 @@ async def query_receivables(status: str = "all") -> dict:
     Args: status — 'all', 'overdue', or 'current'.
     Returns: total_receivable, invoices grouped by aging bucket."""
     today = date.today()
+    company_ids = await get_user_company_ids()
 
     async with get_async_session() as session:
+        filters = [
+            Invoice.direction == InvoiceDirection.ISSUED,
+            Invoice.status.not_in([InvoiceStatus.PAID, InvoiceStatus.CANCELLED]),
+            Invoice.is_deleted == False,  # noqa: E712
+        ]
+        if company_ids:
+            filters.append(_invoice_belongs_to(company_ids))
+
         q = (
             select(Invoice)
-            .where(
-                Invoice.direction == InvoiceDirection.ISSUED,
-                Invoice.status.not_in([InvoiceStatus.PAID, InvoiceStatus.CANCELLED]),
-                Invoice.is_deleted == False,
-            )
+            .where(*filters)
             .order_by(Invoice.due_date)
             .limit(200)
         )

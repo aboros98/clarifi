@@ -87,7 +87,15 @@ def _parse_date(s: str) -> date | None:
 
 async def _search_invoices(session, name, status, min_amt, max_amt,
                            from_date, to_date, limit):
+    from clarifi.agent.company_scope import get_user_company_ids
+
+    company_ids = await get_user_company_ids()
     q = select(Invoice)
+    if company_ids:
+        q = q.where(or_(
+            Invoice.issuer_company_id.in_(company_ids),
+            Invoice.recipient_company_id.in_(company_ids),
+        ))
 
     if name:
         # Search in invoice number or linked company

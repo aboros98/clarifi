@@ -23,8 +23,18 @@ async def query_invoices(
         status — 'paid', 'unpaid', 'overdue', or 'all'
         limit — max results (default 50)
     Returns list of invoices with key fields."""
+    from clarifi.agent.company_scope import get_user_company_ids
+    from sqlalchemy import or_
+
+    company_ids = await get_user_company_ids()
+
     async with get_async_session() as session:
-        q = select(Invoice).where(Invoice.is_deleted == False)
+        q = select(Invoice).where(Invoice.is_deleted == False)  # noqa: E712
+        if company_ids:
+            q = q.where(or_(
+                Invoice.issuer_company_id.in_(company_ids),
+                Invoice.recipient_company_id.in_(company_ids),
+            ))
 
         if direction == "issued":
             q = q.where(Invoice.direction == InvoiceDirection.ISSUED)
