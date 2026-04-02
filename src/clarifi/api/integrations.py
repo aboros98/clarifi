@@ -150,7 +150,7 @@ async def telegram_webhook(request: Request):
     doc = message.get("document")
     photo = message.get("photo")
 
-    if doc or photo:
+    if doc or (photo and len(photo) > 0):
         # Download file from Telegram
         file_id = doc["file_id"] if doc else photo[-1]["file_id"]
         file_name = doc.get("file_name", "telegram_upload.pdf") if doc else "telegram_photo.jpg"
@@ -161,7 +161,10 @@ async def telegram_webhook(request: Request):
                 file_info = await client.get(
                     f"https://api.telegram.org/bot{settings.telegram_bot_token}/getFile",
                     params={"file_id": file_id},
+                    timeout=10,
                 )
+                if file_info.status_code != 200:
+                    raise ValueError(f"Telegram API error: {file_info.status_code}")
                 file_path = file_info.json().get("result", {}).get("file_path")
 
                 if file_path:

@@ -42,7 +42,7 @@ def _generate_efactura_xml(
     ET.SubElement(root, "{%s}CustomizationID" % NS["cbc"]).text = (
         "urn:cen.eu:en16931:2017#compliant#urn:efactura.mfinante.ro:CIUS-RO:1.0.1"
     )
-    ET.SubElement(root, "{%s}ID" % NS["cbc"]).text = invoice.invoice_number
+    ET.SubElement(root, "{%s}ID" % NS["cbc"]).text = invoice.invoice_number or "DRAFT"
     ET.SubElement(root, "{%s}IssueDate" % NS["cbc"]).text = (
         invoice.issue_date.isoformat() if invoice.issue_date else date.today().isoformat()
     )
@@ -76,7 +76,7 @@ def _generate_efactura_xml(
     cp_id = ET.SubElement(customer_party, "{%s}PartyIdentification" % NS["cac"])
     ET.SubElement(cp_id, "{%s}ID" % NS["cbc"]).text = recipient.tax_id or ""
     cp_name = ET.SubElement(customer_party, "{%s}PartyName" % NS["cac"])
-    ET.SubElement(cp_name, "{%s}Name" % NS["cbc"]).text = recipient.legal_name
+    ET.SubElement(cp_name, "{%s}Name" % NS["cbc"]).text = recipient.legal_name or ""
 
     # Tax total
     tax_total = ET.SubElement(root, "{%s}TaxTotal" % NS["cac"])
@@ -124,8 +124,9 @@ def _generate_efactura_xml(
         line_amt.text = str(float(li.line_total))
 
         item = ET.SubElement(line, "{%s}Item" % NS["cac"])
-        ET.SubElement(item, "{%s}Description" % NS["cbc"]).text = li.description
-        ET.SubElement(item, "{%s}Name" % NS["cbc"]).text = li.description[:100]
+        desc = li.description or "Serviciu"
+        ET.SubElement(item, "{%s}Description" % NS["cbc"]).text = desc
+        ET.SubElement(item, "{%s}Name" % NS["cbc"]).text = desc[:100]
         item_tax = ET.SubElement(item, "{%s}ClassifiedTaxCategory" % NS["cac"])
         ET.SubElement(item_tax, "{%s}ID" % NS["cbc"]).text = "S"
         ET.SubElement(item_tax, "{%s}Percent" % NS["cbc"]).text = "19"
