@@ -97,16 +97,32 @@ async def query_cashflow() -> dict:
         invoiced_total = Decimal(str((await session.execute(invoiced_total_q)).scalar_one()))
         not_yet_invoiced = max(Decimal("0"), contract_total - invoiced_total)
 
-        # COMMITTED: milestones due within 30 days
+        # COMMITTED: milestones due within 30 days (scoped by company)
         ms_q = select(func.coalesce(func.sum(ContractMilestone.amount), 0)).where(
             ContractMilestone.completed == False,  # noqa: E712
             ContractMilestone.amount.isnot(None),
             ContractMilestone.due_date >= today,
             ContractMilestone.due_date <= today + timedelta(days=30),
         )
+        if company_ids:
+            ms_q = ms_q.where(
+                ContractMilestone.contract_id.in_(
+                    select(Contract.id).where(
+                        Contract.counterparty_id.in_(company_ids),
+                    )
+                )
+            )
         upcoming_ms_amount = Decimal(str((await session.execute(ms_q)).scalar_one()))
 
-        # RECURRING: monthly fixed costs from contracts (CIM, leasing, rent, etc.)
+        # RECURRING: monthly fixed costs from contracts (scoped by company)
+        recurring_filters = [
+            Contract.is_recurring == True,  # noqa: E712
+            Contract.status == ContractStatus.ACTIVE,
+            Contract.is_deleted == False,  # noqa: E712
+            Contract.recurring_amount.isnot(None),
+        ]
+        if company_ids:
+            recurring_filters.append(Contract.counterparty_id.in_(company_ids))
 
         recurring_q = (
             select(
@@ -114,12 +130,7 @@ async def query_cashflow() -> dict:
                 func.coalesce(func.sum(Contract.recurring_amount), 0),
                 func.count(Contract.id),
             )
-            .where(
-                Contract.is_recurring == True,  # noqa: E712
-                Contract.status == ContractStatus.ACTIVE,
-                Contract.is_deleted == False,  # noqa: E712
-                Contract.recurring_amount.isnot(None),
-            )
+            .where(*recurring_filters)
             .group_by(Contract.contract_type)
         )
         recurring_rows = (await session.execute(recurring_q)).all()

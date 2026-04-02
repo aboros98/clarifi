@@ -218,12 +218,20 @@ async def telegram_webhook(request: Request):
     if not text:
         return {"ok": True}
 
-    # Process text message via agent
+    # Process text message via agent (with user context for isolation)
+    from clarifi.agent.context import current_user_id
+
+    tg_user_id = f"telegram-{chat_id}"
+    current_user_id.set(tg_user_id)
+
     text = f"[{timestamp}] {text}"
     graph = await get_graph()
     try:
         result = await graph.ainvoke(
-            {"messages": [HumanMessage(content=text)]},
+            {
+                "messages": [HumanMessage(content=text)],
+                "user_id": tg_user_id,
+            },
             config={"configurable": {"thread_id": f"telegram-{chat_id}"}},
         )
         response = extract_ai_response(result) or "Nu am putut genera un raspuns."

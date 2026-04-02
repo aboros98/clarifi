@@ -126,8 +126,8 @@ async def emit_invoice(
         subtotal = Decimal("0")
         line_items_data = []
         for i, item in enumerate(items):
-            qty = Decimal(str(item.get("quantity", 1)))
-            price = Decimal(str(item.get("unit_price", 0)))
+            qty = Decimal(str(item.get("quantity") or 1))
+            price = Decimal(str(item.get("unit_price") or 0))
             line_total = qty * price
             subtotal += line_total
             line_items_data.append({
@@ -143,15 +143,16 @@ async def emit_invoice(
         today = date.today()
         due = today + timedelta(days=payment_terms_days)
 
-        # Find linked contract
+        # Find linked contract (scoped to user's companies)
         contract_id = None
         if contract_reference:
-            ct = (await session.execute(
-                select(Contract).where(
-                    Contract.contract_number == contract_reference,
-                    Contract.is_deleted == False,  # noqa: E712
-                ).limit(1)
-            )).scalar_one_or_none()
+            ct_q = select(Contract).where(
+                Contract.contract_number == contract_reference,
+                Contract.is_deleted == False,  # noqa: E712
+            )
+            if company_ids:
+                ct_q = ct_q.where(Contract.counterparty_id.in_(company_ids))
+            ct = (await session.execute(ct_q.limit(1))).scalar_one_or_none()
             if ct:
                 contract_id = ct.id
 
